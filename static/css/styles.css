@@ -1,0 +1,127 @@
+:root {
+  --bg: #0f172a;
+  --panel: #111827;
+  --panel-soft: #1f2937;
+  --accent: #38bdf8;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --border: rgba(148, 163, 184, 0.2);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.topbar {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.9);
+}
+.topbar h1 {
+  margin: 0 0 0.35rem;
+}
+.topbar p {
+  margin: 0;
+  color: var(--muted);
+}
+.layout {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  padding: 1.5rem 2rem 2.5rem;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+.panel.wide {
+  grid-column: 1 / -1;
+}
+form {
+  display: grid;
+  gap: 0.8rem;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+input, textarea, button {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font: inherit;
+}
+input, textarea {
+  background: var(--panel-soft);
+  color: var(--text);
+  padding: 0.7rem 0.8rem;
+}
+button {
+  background: var(--accent);
+  color: #082f49;
+  font-weight: bold;
+  padding: 0.75rem 1rem;
+  border: none;
+  cursor: pointer;
+}
+.video-list {
+  display: grid;
+  gap: 0.8rem;
+}
+.video-card {
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+.video-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.video-card small {
+  display: block;
+  color: var(--muted);
+}
+.annotation-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1rem;
+}
+.video-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.timeline {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+.timeline-bar {
+  height: 12px;
+  background: #374151;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress {
+  width: 32%;
+  height: 100%;
+  background: var(--accent);
+}
+.annotation-form {
+  display: grid;
+  gap: 0.8rem;
+}

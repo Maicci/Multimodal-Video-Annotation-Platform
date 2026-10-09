@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multimodal Video Annotation Platform</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Multimodal Video Annotation Platform</h1>
+      <p>Research prototype for synchronized video, audio, and annotation workflows</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <h2>Upload video</h2>
+      <form id="video-form">
+        <label>
+          Title
+          <input name="title" type="text" value="Sample video" required />
+        </label>
+        <label>
+          File name
+          <input name="filename" type="text" value="sample.mp4" required />
+        </label>
+        <label>
+          Annotator ID
+          <input name="annotator_id" type="text" value="annotator-1" required />
+        </label>
+        <button type="submit">Create video</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Video list</h2>
+      <div id="videos" class="video-list"></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Current annotation</h2>
+      <div class="annotation-grid">
+        <div class="video-panel">
+          <div class="video-placeholder">Video player placeholder</div>
+          <div class="timeline">
+            <span>00:00</span>
+            <div class="timeline-bar"><div class="progress"></div></div>
+            <span>00:30</span>
+          </div>
+        </div>
+        <div class="annotation-form">
+          <label>
+            Video description
+            <textarea id="video-description" rows="6" placeholder="Describe what is visible in the selected segment."></textarea>
+          </label>
+          <label>
+            Audio description
+            <textarea id="audio-description" rows="6" placeholder="Describe concurrent speech or sounds."></textarea>
+          </label>
+          <label>
+            Whole video summary
+            <textarea id="summary" rows="6" placeholder="Summarise the entire video after review."></textarea>
+          </label>
+          <button id="save-segment" type="button">Save segment</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
