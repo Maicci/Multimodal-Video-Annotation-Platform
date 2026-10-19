@@ -1,6 +1,6 @@
 # Multimodal Video Annotation Platform
 
-This repository contains a Python-based research prototype for a browser-driven multimodal video annotation system.
+This repository contains a Python-based research prototype for a browser-driven multimodal video annotation system. The codebase is organized into backend, frontend, processing, shared contracts, and documentation areas.
 
 ## Features in this initial prototype
 
@@ -13,13 +13,20 @@ This repository contains a Python-based research prototype for a browser-driven 
 ## Run locally
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -e ./backend
+uvicorn backend.app.main:app --reload
 ```
 
 Visit http://127.0.0.1:8000 in a browser.
+
+Run the backend API tests from the repository root with:
+
+```bash
+python -m pytest backend/tests
+```
 
 ## Project direction
 

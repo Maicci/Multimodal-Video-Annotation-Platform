@@ -1,0 +1,6 @@
+{
+  "name": "multimodal-video-annotation-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frontend workspace for the multimodal video annotation platform"
+}
