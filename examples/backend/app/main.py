@@ -9,8 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-STATIC_DIR = PROJECT_ROOT / 'frontend' / 'src' / 'assets'
+EXAMPLES_ROOT = Path(__file__).resolve().parents[2]
+STATIC_DIR = EXAMPLES_ROOT / 'frontend' / 'src' / 'assets'
 TEMPLATE_DIR = Path(__file__).resolve().parent / 'templates'
 
 

@@ -1,9 +1,5 @@
-# Backend
+# Backend skeleton
 
-FastAPI application and backend tests. Run the service from the repository root:
-
-```bash
-uvicorn backend.app.main:app --reload
-```
-
-Run tests with `python -m pytest backend/tests`.
+This directory is reserved for the platform backend. It contains placeholder
+files only; the runnable FastAPI prototype is kept separately in
+[`../examples/backend/`](../examples/backend/).

@@ -1,4 +1,5 @@
-# Frontend
+# Frontend skeleton
 
-Frontend source, assets, and tests live here. The initial prototype UI is served
-by the FastAPI application while this workspace is expanded.
+This directory is reserved for the platform frontend. It contains placeholder
+files only; the example UI is kept separately in
+[`../examples/frontend/`](../examples/frontend/).

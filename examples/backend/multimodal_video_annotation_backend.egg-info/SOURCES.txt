@@ -17,13 +17,6 @@ app/api/routes/videos.py
 app/core/config.py
 app/core/exceptions.py
 app/core/security.py
-app/db/base.py
-app/db/session.py
-app/db/models/annotation.py
-app/db/models/processing_job.py
-app/db/models/review.py
-app/db/models/user.py
-app/db/models/video.py
 app/schemas/annotation.py
 app/schemas/export.py
 app/schemas/review.py
