@@ -18,4 +18,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: node --check frontend/src/assets/js/app.js
+      - name: Check frontend JavaScript syntax
+        run: |
+          mapfile -d '' files < <(find frontend/src -type f -name '*.js' -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No JavaScript source files found under frontend/src; skipping syntax checks."
+          else
+            for file in "${files[@]}"; do
+              node --check "$file"
+            done
+          fi
+
+# TODO add job for running the tests, if any are written
