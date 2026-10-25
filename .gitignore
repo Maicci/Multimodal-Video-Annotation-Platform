@@ -8,3 +8,4 @@ dist/
 coverage/
 storage/*
 !storage/README.md
+*.egg-info/
