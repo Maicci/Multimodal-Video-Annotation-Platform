@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
+import uuid
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.services.multimodal_processing import ProcessingJobManager
 
-EXAMPLES_ROOT = Path(__file__).resolve().parents[2]
-STATIC_DIR = EXAMPLES_ROOT / 'frontend' / 'src' / 'assets'
-TEMPLATE_DIR = Path(__file__).resolve().parent / 'templates'
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR.parent / 'frontend' / 'src' / 'assets'
+TEMPLATE_DIR = BASE_DIR / 'templates'
+UPLOAD_DIR = BASE_DIR.parent.parent / 'data' / 'uploads'
+MAX_UPLOAD_BYTES = 1024 ** 3
+ALLOWED_VIDEO_SUFFIXES = {'.mp4', '.mov', '.mkv', '.webm'}
 
 
 app = FastAPI(
@@ -25,6 +31,7 @@ app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
 VIDEO_STORE: Dict[str, Dict] = {}
 SEGMENT_STORE: Dict[str, List[Dict]] = {}
 SUMMARY_STORE: Dict[str, Dict] = {}
+PROCESSING_JOBS = ProcessingJobManager()
 
 
 class VideoCreateRequest(BaseModel):
@@ -61,6 +68,16 @@ class VideoSummaryResponse(BaseModel):
     summary: str
 
 
+class ProcessingJobResponse(BaseModel):
+    id: str
+    video_id: str
+    status: str
+    created_at: str
+    updated_at: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
 @app.get('/api/health')
 def healthcheck() -> Dict[str, str]:
     return {'status': 'ok', 'project': 'multimodal-video-annotation-platform'}
@@ -92,6 +109,55 @@ def create_video(payload: VideoCreateRequest) -> VideoResponse:
     SEGMENT_STORE.setdefault(video_id, [])
     SUMMARY_STORE.setdefault(video_id, {'video_id': video_id, 'annotator_id': payload.annotator_id, 'summary': ''})
     return VideoResponse(**item)
+
+
+@app.post('/api/videos/{video_id}/upload')
+def upload_video(video_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+    if video_id not in VIDEO_STORE:
+        raise HTTPException(status_code=404, detail='Video not found')
+    filename = Path(file.filename or '').name
+    if Path(filename).suffix.lower() not in ALLOWED_VIDEO_SUFFIXES:
+        raise HTTPException(status_code=415, detail='Unsupported video format')
+
+    destination_dir = UPLOAD_DIR / video_id
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / filename
+    temporary = destination.with_name(f'.{destination.name}.{uuid.uuid4().hex}.part')
+    size = 0
+    try:
+        with temporary.open('wb') as output:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail='Video exceeds the 1 GiB upload limit')
+                output.write(chunk)
+        temporary.replace(destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+    VIDEO_STORE[video_id]['source_path'] = str(destination)
+    VIDEO_STORE[video_id]['filename'] = filename
+    return {'video_id': video_id, 'filename': filename, 'status': 'uploaded', 'size_bytes': size}
+
+
+@app.post('/api/videos/{video_id}/processing', response_model=ProcessingJobResponse, status_code=202)
+def start_video_processing(video_id: str) -> ProcessingJobResponse:
+    video = VIDEO_STORE.get(video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail='Video not found')
+    source_path = video.get('source_path')
+    if not source_path or not Path(source_path).is_file():
+        raise HTTPException(status_code=409, detail='Upload a video before starting processing')
+    return ProcessingJobResponse(**PROCESSING_JOBS.submit(video_id, source_path))
+
+
+@app.get('/api/processing/jobs/{job_id}', response_model=ProcessingJobResponse)
+def get_processing_job(job_id: str) -> ProcessingJobResponse:
+    job = PROCESSING_JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail='Processing job not found')
+    return ProcessingJobResponse(**job)
 
 
 @app.get('/api/videos/{video_id}/segments')

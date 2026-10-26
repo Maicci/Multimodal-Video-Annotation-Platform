@@ -1,0 +1,5 @@
+-r requirements.txt
+mediapipe==1.1.0
+faster-whisper==1.2.1
+av<19
+opensmile==2.6.0
