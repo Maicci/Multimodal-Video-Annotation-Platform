@@ -1,19 +1,57 @@
+// Component for streaming a video, tracking playback time and frame,
+// ...and controlling playback through the interactive frame timeline.
+
 import { useRef, useState } from "react";
 import "../../assets/css/VideoViewer.css";
+import FrameTimeline from "./FrameTimelines";
 
-function VideoViewer() {
+// videoId is a number that identifies a specific video to be annotated
+type Props = {
+  videoId: number;
+};
+
+function VideoViewer({ videoId }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  // The API URL is defined in the .env file
+  const API_URL = import.meta.env.VITE_API_URL;
 
-  const fps = 30;
-  const currentFrame = Math.floor(currentTime * fps);
-
-  function handleTimeUpdate() {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+  async function handleTimeUpdate() {
+    if (!videoRef.current) {
+      return;
     }
+
+    const time = videoRef.current.currentTime;
+
+    setCurrentTime(time);
+
+    const response = await fetch(
+      `${API_URL}/api/videos/${videoId}/frame?time=${time}`
+    );
+
+    const data = await response.json();
+
+    setCurrentFrame(data.frame);
+  }
+
+  function handleLoadedMetadata() {
+    if (!videoRef.current) {
+      return;
+    }
+
+    setDuration(videoRef.current.duration);
+  }
+
+  function handleTimelineChange(time: number) {
+    if (!videoRef.current) {
+      return;
+    }
+
+    videoRef.current.currentTime = time;
+    setCurrentTime(time);
   }
 
   function togglePlayback() {
@@ -38,8 +76,12 @@ function VideoViewer() {
             ref={videoRef}
             className="video-player"
             onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
           >
-            <source src="/example.mp4" type="video/mp4" />
+            <source
+              src={`${API_URL}/api/videos/${videoId}/stream`}
+              type="video/mp4"
+            />
           </video>
 
           <div className="video-controls">
@@ -65,26 +107,27 @@ function VideoViewer() {
             <strong>00:00 – 00:12</strong>
             <span>Introduction</span>
           </div>
-
         </aside>
       </div>
 
-      <div className="timeline">
-        Timeline / waveform
-      </div>
+      <FrameTimeline
+        videoId={videoId}
+        currentTime={currentTime}
+        duration={duration}
+        onTimeChange={handleTimelineChange}
+      />
 
       <section className="annotation-details">
         <h2>Annotation details</h2>
 
         <div className="annotation-grid">
           <div className="annotation-left">
-            
             <label>
               Segment
               <select>
                 <option value="1">Introduction</option>
-                </select>
-                </label>
+              </select>
+            </label>
 
             <label>
               Description
@@ -101,7 +144,6 @@ function VideoViewer() {
                 defaultValue="Summarization of the whole video"
               />
             </label>
-
           </div>
         </div>
 

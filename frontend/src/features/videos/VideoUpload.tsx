@@ -1,3 +1,5 @@
+// Video upload component for selecting and validating MP4/MOV video files before upload
+
 import { useState } from "react";
 
 function VideoUpload() {

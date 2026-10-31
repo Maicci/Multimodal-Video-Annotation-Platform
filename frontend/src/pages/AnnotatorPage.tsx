@@ -12,7 +12,7 @@ function AnnotatorPage() {
       </header>
 
       <main className="annotator-content">
-        <VideoViewer />
+        <VideoViewer videoId={1} />
       </main>
     </div>
   );
