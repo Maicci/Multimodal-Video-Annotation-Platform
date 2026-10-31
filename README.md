@@ -1,6 +1,6 @@
 # Multimodal Video Annotation Platform
 
-This repository contains the starter skeleton for a browser-driven multimodal video annotation system. The `backend` and `frontend` directories are reserved for application development; the runnable prototype is kept separately under [`examples/`](./examples/).
+This repository contains the starter skeleton for a browser-driven multimodal video annotation system. The `backend` and `frontend` directories are reserved for application development; the runnable example lives in `examples/`.
 
 ## Example application
 
@@ -26,3 +26,7 @@ The platform is designed to evolve toward:
 - multimodal alignment for pose, acoustic features, and speech transcripts
 - multi-user annotation with independent data stores
 - export and agreement reporting
+
+## Contributors
+
+- [esaab](https://github.com/esaab)
