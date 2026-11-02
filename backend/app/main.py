@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from contextlib import closing
-from typing import AsyncIterator
-from uuid import uuid4
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
 
@@ -13,6 +12,10 @@ from app.api.router import api_router
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.database import Database
+from app.repositories.user_repository import (
+    create_user,
+    find_user_role_by_email,
+)
 from app.schemas.user import Role, UserCreate
 
 
@@ -27,35 +30,27 @@ def _bootstrap_admin(database: Database, settings: Settings) -> None:
         password=settings.initial_admin_password,
         role=Role.ADMINISTRATOR,
     )
-    with closing(database.connect()) as connection, connection:
-        existing = connection.execute(
-            "SELECT role FROM users WHERE email = ?", (user.email,)
-        ).fetchone()
-        if existing is not None:
-            if existing["role"] != Role.ADMINISTRATOR.value:
+    with closing(database.connect()) as connection:
+        existing_role = find_user_role_by_email(connection, user.email)
+        if existing_role is not None:
+            if existing_role != Role.ADMINISTRATOR.value:
                 raise ValueError("INITIAL_ADMIN_EMAIL belongs to a non-administrator account")
             return
-        connection.execute(
-            """
-            INSERT INTO users (id, email, full_name, role, password_hash)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid4()),
-                user.email,
-                user.full_name,
-                Role.ADMINISTRATOR.value,
-                hash_password(user.password),
-            ),
+        create_user(
+            connection,
+            email=user.email,
+            full_name=user.full_name,
+            role=Role.ADMINISTRATOR.value,
+            password_hash=hash_password(user.password),
         )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     application_settings = settings or Settings.from_environment()
-    database = Database(application_settings.database_path)
+    database = Database(application_settings.database_url)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         application_settings.validate()
         database.initialize()
         _bootstrap_admin(database, application_settings)

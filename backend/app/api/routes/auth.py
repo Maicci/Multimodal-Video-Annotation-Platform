@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import sqlite3
+from typing import Any
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -10,12 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.api.dependencies import Connection, CurrentUser
 from app.core.config import Settings
 from app.core.security import create_access_token, verify_password
+from app.repositories.user_repository import find_user_credentials_by_email
 from app.schemas.user import CurrentUserResponse, LoginRequest, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
-def _public_user(user: sqlite3.Row) -> CurrentUserResponse:
+def _public_user(user: dict[str, Any]) -> CurrentUserResponse:
     return CurrentUserResponse(
         id=user["id"],
         email=user["email"],
@@ -31,10 +33,7 @@ def login(
     request: Request,
     connection: Connection,
 ) -> TokenResponse:
-    user = connection.execute(
-        "SELECT id, password_hash FROM users WHERE email = ?",
-        (payload.email,),
-    ).fetchone()
+    user = find_user_credentials_by_email(connection, payload.email)
     if user is None or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

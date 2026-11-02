@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-import sqlite3
-from typing import Annotated
-from uuid import UUID, uuid4
+from typing import Annotated, Any
+from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlite3 import IntegrityError
 
 from app.api.dependencies import Connection, require_roles
 from app.core.security import hash_password
+from app.repositories.user_repository import (
+    count_users_with_role,
+    create_user as create_user_record,
+    delete_user as delete_user_record,
+    find_user_by_id,
+    find_user_role_by_id,
+    list_users as list_user_records,
+    update_user_role,
+)
 from app.schemas.user import Role, RoleUpdate, UserCreate, UserResponse
 
 router = APIRouter(
@@ -20,7 +28,7 @@ router = APIRouter(
 )
 
 
-def _user_response(user: sqlite3.Row) -> UserResponse:
+def _user_response(user: dict[str, Any]) -> UserResponse:
     return UserResponse(
         id=user["id"],
         email=user["email"],
@@ -32,39 +40,28 @@ def _user_response(user: sqlite3.Row) -> UserResponse:
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, connection: Connection) -> UserResponse:
-    user_id = str(uuid4())
     try:
-        with connection:
-            connection.execute(
-                """
-                INSERT INTO users (id, email, full_name, role, password_hash)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    user_id,
-                    payload.email,
-                    payload.full_name,
-                    payload.role.value,
-                    hash_password(payload.password),
-                ),
-            )
-    except IntegrityError as error:
-        if "users.email" in str(error):
+        user = create_user_record(
+            connection,
+            email=payload.email,
+            full_name=payload.full_name,
+            role=payload.role.value,
+            password_hash=hash_password(payload.password),
+        )
+    except psycopg.IntegrityError as error:
+        if error.diag.constraint_name == "users_email_unique":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A user with this email already exists",
             ) from error
         raise
 
-    user = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return _user_response(user)
 
 
 @router.get("", response_model=list[UserResponse])
 def list_users(connection: Connection) -> list[UserResponse]:
-    users = connection.execute(
-        "SELECT id, email, full_name, role, created_at FROM users ORDER BY email"
-    ).fetchall()
+    users = list_user_records(connection)
     return [_user_response(user) for user in users]
 
 
@@ -74,27 +71,20 @@ def change_user_role(
     payload: RoleUpdate,
     connection: Connection,
 ) -> UserResponse:
-    user = connection.execute("SELECT * FROM users WHERE id = ?", (str(user_id),)).fetchone()
+    user = find_user_by_id(connection, str(user_id))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if user["role"] == Role.ADMINISTRATOR.value and payload.role != Role.ADMINISTRATOR:
-        admin_count = connection.execute(
-            "SELECT COUNT(*) FROM users WHERE role = ?",
-            (Role.ADMINISTRATOR.value,),
-        ).fetchone()[0]
+        admin_count = count_users_with_role(connection, Role.ADMINISTRATOR.value)
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot demote the last administrator",
             )
-    with connection:
-        connection.execute(
-            "UPDATE users SET role = ? WHERE id = ?",
-            (payload.role.value, str(user_id)),
-        )
-    updated_user = connection.execute(
-        "SELECT * FROM users WHERE id = ?", (str(user_id),)
-    ).fetchone()
+    update_user_role(connection, str(user_id), payload.role.value)
+    updated_user = find_user_by_id(connection, str(user_id))
+    if updated_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return _user_response(updated_user)
 
 
@@ -102,32 +92,26 @@ def change_user_role(
 def delete_user(
     user_id: UUID,
     connection: Connection,
-    actor: Annotated[sqlite3.Row, Depends(require_roles(Role.ADMINISTRATOR))],
+    actor: Annotated[dict[str, Any], Depends(require_roles(Role.ADMINISTRATOR))],
 ) -> None:
     if actor["id"] == str(user_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Administrators cannot delete their own account",
         )
-    user = connection.execute(
-        "SELECT role FROM users WHERE id = ?", (str(user_id),)
-    ).fetchone()
-    if user is None:
+    role = find_user_role_by_id(connection, str(user_id))
+    if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if user["role"] == Role.ADMINISTRATOR.value:
-        admin_count = connection.execute(
-            "SELECT COUNT(*) FROM users WHERE role = ?",
-            (Role.ADMINISTRATOR.value,),
-        ).fetchone()[0]
+    if role == Role.ADMINISTRATOR.value:
+        admin_count = count_users_with_role(connection, Role.ADMINISTRATOR.value)
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete the last administrator",
             )
     try:
-        with connection:
-            connection.execute("DELETE FROM users WHERE id = ?", (str(user_id),))
-    except IntegrityError as error:
+        delete_user_record(connection, str(user_id))
+    except psycopg.IntegrityError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete a user who has authored annotations or comments",

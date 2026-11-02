@@ -16,10 +16,10 @@ ADMIN_PASSWORD = "initial-admin-password-123"
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> Iterator[TestClient]:
+def client(test_database_url: str, tmp_path: Path) -> Iterator[TestClient]:
     app = create_app(
         Settings(
-            database_path=tmp_path / "test.sqlite3",
+            database_url=test_database_url,
             jwt_secret_key="test-signing-key-with-at-least-32-characters",
             access_token_minutes=30,
             initial_admin_email=ADMIN_EMAIL,
@@ -88,4 +88,4 @@ def test_login_me_and_user_management_access(client: TestClient) -> None:
         "/api/auth/login",
         json={"email": ADMIN_EMAIL, "password": "wrong-password"},
     ).status_code == 401
-
+    
