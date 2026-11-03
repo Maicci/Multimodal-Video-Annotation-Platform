@@ -27,6 +27,3 @@ The platform is designed to evolve toward:
 - multi-user annotation with independent data stores
 - export and agreement reporting
 
-## Contributors
-
-- [esaab](https://github.com/esaab)
