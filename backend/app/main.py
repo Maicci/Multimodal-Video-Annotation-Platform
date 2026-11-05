@@ -1,7 +1,7 @@
 """FastAPI application entry point."""
 
 from __future__ import annotations
-
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from contextlib import closing
 from typing import AsyncGenerator
@@ -62,6 +62,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    application.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+    
     application.state.database = database
     application.state.settings = application_settings
     application.include_router(api_router)
