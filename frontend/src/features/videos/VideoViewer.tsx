@@ -1,5 +1,6 @@
-// Component for streaming a video, tracking playback time and frame,
-// ...and controlling playback through the interactive frame timeline.
+// Main video player component for the annotation workspace.
+// Streams the selected video, tracks playback time and frame number
+// Connects playback to the interactive timeline, and displays annotation controls.
 
 import { useRef, useState } from "react";
 import "../../assets/css/VideoViewer.css";
@@ -7,7 +8,7 @@ import FrameTimeline from "./FrameTimelines";
 
 // videoId is a number that identifies a specific video to be annotated
 type Props = {
-  videoId: number;
+  videoId: string;
 };
 
 function VideoViewer({ videoId }: Props) {

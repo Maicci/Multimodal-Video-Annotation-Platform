@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import "../../assets/css/FrameTimeline.css";
 
 type Props = {
-  videoId: number;
+  videoId: string;
   currentTime: number;
   duration: number;
   onTimeChange: (time: number) => void;

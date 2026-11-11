@@ -1,42 +1,69 @@
-from pathlib import Path
-from app.services.frame_timing import FrameTimeline
+"""
 
+"""
+from app.repositories.video_repository import find_video_by_id
+from app.api.dependencies import Connection
+from app.services.frame_timing import FrameTimeline
+from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 router = APIRouter()
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
-# Hardcoded path for test videos
-VIDEO_PATH = Path("../storage/videos/example.mp4")
-# Hardcoded path for test timeline
-TIMELINE_PATH = Path("../storage/videos/example_timeline.npy")
-# Hardcoded path for test frames
-FRAME_DIR = Path("../storage/videos/example_frames")
 
 # Route to stream the video
-@router.get("/videos/1/stream")
-def stream_video():
-    if not VIDEO_PATH.exists():
+@router.get("/videos/{video_id}/stream")
+def stream_video(video_id: str, connection: Connection):
+    video = find_video_by_id(connection, video_id)
+
+    if video is None:
         raise HTTPException(
             status_code=404,
             detail="Video not found",
         )
 
+    video_path = Path(video.storage_path)
+
+    if not video_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Video file not found",
+        )
+
     return FileResponse(
-        path=VIDEO_PATH,
-        media_type="video/mp4",
+        path=video_path,
+        media_type=video.mime_type,
     )
 
 # Route to get the timeline information
-@router.get("/videos/1/timeline")
-def get_timeline():
-    if not TIMELINE_PATH.exists():
+@router.get("/videos/{video_id}/timeline")
+def get_timeline(video_id: str, connection: Connection):
+    video = find_video_by_id(connection, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found",
+        )
+
+    video_stem = Path(video.stored_filename).stem
+
+    timeline_path = (
+        PROJECT_ROOT
+        / "storage"
+        / "videos"
+        / "timelines"
+        / f"{video_stem}.npy"
+    )
+
+    if not timeline_path.exists():
         raise HTTPException(
             status_code=404,
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(TIMELINE_PATH)
+    timeline = FrameTimeline.load(timeline_path)
 
     return {
         "frame_count": timeline.frame_count,
@@ -44,39 +71,105 @@ def get_timeline():
     }
 
 # Route to get the frame number for a given time
-@router.get("/videos/1/frame")
-def get_frame(time: float):
-    if not TIMELINE_PATH.exists():
+@router.get("/videos/{video_id}/frame")
+def get_frame(
+    video_id: str,
+    time: float,
+    connection: Connection,
+):
+    video = find_video_by_id(connection, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found",
+        )
+
+    video_stem = Path(video.stored_filename).stem
+
+    timeline_path = (
+        PROJECT_ROOT
+        / "storage"
+        / "videos"
+        / "timelines"
+        / f"{video_stem}.npy"
+    )
+
+    if not timeline_path.exists():
         raise HTTPException(
             status_code=404,
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(TIMELINE_PATH)
+    timeline = FrameTimeline.load(timeline_path)
 
     return {
         "frame": timeline.time_to_frame(time),
     }
 
 # Route to get the time for a given frame number
-@router.get("/videos/1/frame-time")
-def get_frame_time(frame: int):
-    if not TIMELINE_PATH.exists():
+# Route to get the time for a given frame number
+@router.get("/videos/{video_id}/frame-time")
+def get_frame_time(
+    video_id: str,
+    frame: int,
+    connection: Connection,
+):
+    video = find_video_by_id(connection, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found",
+        )
+
+    video_stem = Path(video.stored_filename).stem
+
+    timeline_path = (
+        PROJECT_ROOT
+        / "storage"
+        / "videos"
+        / "timelines"
+        / f"{video_stem}.npy"
+    )
+
+    if not timeline_path.exists():
         raise HTTPException(
             status_code=404,
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(TIMELINE_PATH)
+    timeline = FrameTimeline.load(timeline_path)
 
     return {
         "time": timeline.frame_to_time(frame),
     }
 
 # Route to get a thumbnail image for a given frame number
-@router.get("/videos/1/thumbnails/{thumbnail}")
-def get_thumbnail(thumbnail: int):
-    thumbnail_path = FRAME_DIR / f"{thumbnail}.jpg"
+@router.get("/videos/{video_id}/thumbnails/{thumbnail}")
+def get_thumbnail(
+    video_id: str,
+    thumbnail: int,
+    connection: Connection,
+):
+    video = find_video_by_id(connection, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found",
+        )
+
+    video_stem = Path(video.stored_filename).stem
+
+    thumbnail_path = (
+        PROJECT_ROOT
+        / "storage"
+        / "videos"
+        / "thumbnails"
+        / video_stem
+        / f"{thumbnail}.jpg"
+    )
 
     if not thumbnail_path.exists():
         raise HTTPException(

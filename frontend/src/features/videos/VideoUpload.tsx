@@ -1,4 +1,5 @@
-// Video upload component for selecting and validating MP4/MOV video files before upload
+// Handles administrator's video selection and upload
+// Validates file type and size and sends the video to the backend
 
 import { useState } from "react";
 
