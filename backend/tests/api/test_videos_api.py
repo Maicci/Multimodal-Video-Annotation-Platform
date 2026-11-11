@@ -128,7 +128,13 @@ def test_upload_video_persists_bytes_metadata_and_uploader(
     assert row["processing_status"] == "PENDING"
     stored_path = Path(row["storage_path"])
     assert stored_path.read_bytes() == VIDEO_BYTES
-    queued.assert_called_once_with(body["id"], _app(client).state.settings.database_url)
+    queued.assert_called_once()
+    args = queued.call_args.args
+    assert args[0] == body["id"]
+    assert args[1] == _app(client).state.settings.database_url
+    assert args[2] == stored_path
+    assert args[3] == stored_path.parent.parent / "timelines" / f"{stored_path.stem}.npy"
+    assert args[4] == stored_path.parent.parent / "thumbnails" / stored_path.stem
 
 
 def test_rejects_unsupported_file_type(client: TestClient) -> None:
@@ -151,6 +157,10 @@ def test_duplicate_filename_does_not_replace_original(
     monkeypatch.setattr(
         "app.api.routes.videos.extract_video_metadata",
         Mock(side_effect=_metadata_for_existing_file),
+    )
+    monkeypatch.setattr(
+        "app.api.routes.videos.process_video",
+        Mock(),
     )
     token = _token(client)
     first = _upload(client, token, content=b"first upload")
