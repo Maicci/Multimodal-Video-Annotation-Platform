@@ -1,3 +1,6 @@
+// Displays the administrator's video list.
+// Shows basic video information, processing status, annotation progress, etc.
+
 import "../../assets/css/VideoList.css";
 
 type Video = {

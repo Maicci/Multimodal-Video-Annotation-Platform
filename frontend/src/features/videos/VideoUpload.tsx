@@ -1,12 +1,17 @@
+// Handles administrator's video selection and upload
+// Validates file type and size and sends the video to the backend
+
 import { useState } from "react";
 
 function VideoUpload() {
   const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
-  const allowedTypes: string[] = [
+  const allowedTypes = [
     "video/mp4",
-    "video/quicktime"
+    "video/quicktime",
   ];
 
   const maxFileSize = 500 * 1024 * 1024;
@@ -16,10 +21,9 @@ function VideoUpload() {
 
     setFile(null);
     setError("");
+    setSuccessMessage("");
 
-    if (!selectedFile) {
-      return;
-    }
+    if (!selectedFile) return;
 
     if (!allowedTypes.includes(selectedFile.type)) {
       setError("Only MP4 and MOV files are supported.");
@@ -27,11 +31,66 @@ function VideoUpload() {
     }
 
     if (selectedFile.size > maxFileSize) {
-      setError("The selected file is too large.");
+      setError("The selected file is too large. Maximum size is 500 MB.");
       return;
     }
 
     setFile(selectedFile);
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+
+    setIsUploading(true);
+    setError("");
+    setSuccessMessage("");
+
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      setError("You must be logged in to upload videos.");
+      setIsUploading(false);
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.append("upload", file);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/videos/upload",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Video upload failed.");
+      }
+
+      console.log("Uploaded video:", data);
+
+      setSuccessMessage(
+        `Video "${data.filename}" uploaded successfully. Status: ${data.status}`
+      );
+
+      setFile(null);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Video upload failed.");
+      }
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
@@ -55,11 +114,14 @@ function VideoUpload() {
 
       {error && <p>{error}</p>}
 
+      {successMessage && <p>{successMessage}</p>}
+
       <button
         type="button"
-        disabled={!file}
+        disabled={!file || isUploading}
+        onClick={handleUpload}
       >
-        Upload
+        {isUploading ? "Uploading..." : "Upload"}
       </button>
     </section>
   );

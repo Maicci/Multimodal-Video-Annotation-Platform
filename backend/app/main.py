@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.api.videoplayer import router as videos_router
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.database import Database
@@ -24,18 +25,24 @@ def _bootstrap_admin(database: Database, settings: Settings) -> None:
         return
 
     email = settings.initial_admin_email.strip().lower()
+
     user = UserCreate(
         email=email,
         full_name=settings.initial_admin_name,
         password=settings.initial_admin_password,
         role=Role.ADMINISTRATOR,
     )
+
     with closing(database.connect()) as connection:
         existing_role = find_user_role_by_email(connection, user.email)
+
         if existing_role is not None:
             if existing_role != Role.ADMINISTRATOR.value:
-                raise ValueError("INITIAL_ADMIN_EMAIL belongs to a non-administrator account")
+                raise ValueError(
+                    "INITIAL_ADMIN_EMAIL belongs to a non-administrator account"
+                )
             return
+
         create_user(
             connection,
             email=user.email,
@@ -62,9 +69,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     application.state.database = database
     application.state.settings = application_settings
+
     application.include_router(api_router)
+    application.include_router(
+        videos_router,
+        prefix="/api",
+    )
 
     @application.get("/api/health", tags=["health"])
     def healthcheck() -> dict[str, str]:
