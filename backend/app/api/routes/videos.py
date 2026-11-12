@@ -62,15 +62,18 @@ def upload_video(
     user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> VideoUploadResponse | JSONResponse:
-    
+
     # Check filename
     filename = (upload.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+
     if not filename or filename in {".", ".."}:
         return _error(400, "A valid filename is required")
+
     if Path(filename).suffix.lower() not in ALLOWED_EXTENSIONS:
         return _error(415, "Unsupported video format")
 
     duplicate_id = find_video_by_filename(connection, filename)
+
     if duplicate_id is not None:
         return _error(
             409,
@@ -81,6 +84,7 @@ def upload_video(
 
     # Store the video
     storage_directory = settings.video_storage_path
+
     if storage_directory is None:
         storage_directory = (
             Path(__file__).resolve().parents[3]
@@ -88,6 +92,7 @@ def upload_video(
             / "videos"
             / "original"
         )
+
     try:
         stored_video = store_video(
             upload.file,
@@ -110,6 +115,7 @@ def upload_video(
 
     # Create database entry
     mime_type = upload.content_type or mimetypes.guess_type(filename)[0]
+
     try:
         video = create_video(
             connection,
@@ -121,7 +127,9 @@ def upload_video(
         )
     except psycopg.IntegrityError:
         remove_stored_video(stored_video)
+
         duplicate_id = find_video_by_filename(connection, filename)
+
         if duplicate_id is not None:
             return _error(
                 409,
@@ -129,15 +137,38 @@ def upload_video(
                 video_id=duplicate_id,
                 action_required=True,
             )
+
         logger.exception("Could not create database record for %s", filename)
         return _error(500, "Database failure")
+
     except psycopg.Error:
         remove_stored_video(stored_video)
         logger.exception("Could not create database record for %s", filename)
         return _error(500, "Database failure")
 
-    # Start backround processing job
-    background_tasks.add_task(process_video, video.id, settings.database_url)
+    # Create path for frame timeline .npy file
+    timeline_path = (
+        storage_directory.parent
+        / "timelines"
+        / f"{Path(stored_video.filename).stem}.npy"
+    )
+
+    thumbnails_dir = (
+    storage_directory.parent
+    / "thumbnails"
+    / Path(stored_video.filename).stem
+    )
+
+    # Start background processing job
+    background_tasks.add_task(
+        process_video,
+        video.id,
+        settings.database_url,
+        stored_video.path,
+        timeline_path,
+        thumbnails_dir,
+    )
+
     return VideoUploadResponse(
         id=UUID(video.id),
         filename=video.original_filename,

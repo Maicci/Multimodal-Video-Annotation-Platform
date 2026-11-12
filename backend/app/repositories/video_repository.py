@@ -23,6 +23,55 @@ def find_video_by_filename(
     ).fetchone()
     return None if row is None else str(row["id"])
 
+def find_video_by_id(
+    connection: psycopg.Connection[dict[str, Any]],
+    video_id: str,
+) -> Video | None:
+    row = connection.execute(
+        """
+        SELECT
+            id,
+            original_filename,
+            stored_filename,
+            storage_path,
+            uploader_id,
+            upload_time,
+            file_size_bytes,
+            mime_type,
+            duration_seconds,
+            width,
+            height,
+            fps,
+            codec,
+            processing_status,
+            metadata_extracted
+        FROM videos
+        WHERE id = %s
+        """,
+        (video_id,),
+    ).fetchone()
+
+    if row is None:
+        return None
+
+    return Video(
+        id=str(row["id"]),
+        original_filename=row["original_filename"],
+        stored_filename=row["stored_filename"],
+        storage_path=row["storage_path"],
+        uploader_id=str(row["uploader_id"]),
+        upload_time=row["upload_time"].isoformat(),
+        file_size_bytes=row["file_size_bytes"],
+        mime_type=row["mime_type"],
+        duration_seconds=row["duration_seconds"],
+        width=row["width"],
+        height=row["height"],
+        fps=row["fps"],
+        codec=row["codec"],
+        processing_status=row["processing_status"],
+        metadata_extracted=row["metadata_extracted"],
+    )
+
 
 def create_video(
     connection: psycopg.Connection,
