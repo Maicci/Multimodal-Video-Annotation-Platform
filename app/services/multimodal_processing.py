@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
+import struct
 import subprocess
 import tempfile
 import threading
 import time
 import uuid
+import wave
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -22,7 +25,7 @@ POSE_MODEL_PATH = Path(os.getenv('MEDIAPIPE_POSE_MODEL', BASE_DIR / 'models/pose
 @dataclass
 class ProcessingStatus:
     video_id: str
-    status: str = 'queued'
+    status: str = 'Queued'
     message: str = ''
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec='seconds'))
 
@@ -33,21 +36,30 @@ class MultimodalProcessingPipeline:
     def __init__(self, video_id: str, source_path: str | Path):
         self.video_id = video_id
         self.source_path = Path(source_path)
-        self.status = ProcessingStatus(video_id=video_id, status='queued', message='Pipeline initialized')
+        self.status = ProcessingStatus(video_id=video_id, status='Queued', message='Pipeline initialized')
 
     def run(self) -> Dict[str, object]:
         if not self.source_path.is_file():
             raise FileNotFoundError(f'Media file does not exist: {self.source_path}')
 
         started = time.perf_counter()
-        self.status.status = 'processing'
+        started_at = datetime.now(timezone.utc).isoformat(timespec='seconds')
+        self.status.status = 'Running'
         metadata = self._probe_media()
         audio_present = metadata['audio'] is not None
+        artifact_dir = self.source_path.parent / 'artifacts'
         with tempfile.TemporaryDirectory(prefix='multimodal-') as temp_dir:
             audio_path = Path(temp_dir) / 'audio.wav'
             if audio_present:
                 self._extract_audio(audio_path)
 
+            waveform = self._timed_tool(
+                'waveform',
+                lambda: self._generate_waveform(audio_path)
+                if audio_present else self._skipped('FFmpeg waveform', 'No audio stream'),
+            )
+            if waveform.get('status') == 'completed':
+                self._write_json_artifact(artifact_dir / 'waveform.json', waveform)
             pose = self._timed_tool('mediapipe_pose', lambda: self._run_pose(self.source_path))
             audio_features = self._timed_tool(
                 'opensmile',
@@ -58,11 +70,17 @@ class MultimodalProcessingPipeline:
                 lambda: self._run_whisper(audio_path) if audio_present else self._skipped('faster-whisper', 'No audio stream'),
             )
 
-        outputs = (pose, audio_features, transcripts)
-        warnings = [output.get('error') for output in outputs if output.get('status') in ('failed', 'unavailable')]
+        outputs = (waveform, pose, audio_features, transcripts)
+        failures = [
+            f"{output.get('provider', 'processor')}: {output.get('error', output.get('status'))}"
+            for output in outputs
+            if output.get('status') in ('failed', 'unavailable')
+        ]
+        metadata_path = 'artifacts/processing.json'
         result = {
             'video_id': self.video_id,
             'source_metadata': metadata,
+            'waveform': waveform,
             'pose': pose,
             'audio_features': audio_features,
             'transcripts': transcripts,
@@ -71,18 +89,68 @@ class MultimodalProcessingPipeline:
                 'time_unit': 'seconds',
             },
             'processing': {
+                'status': 'Failed' if failures else 'Completed',
+                'started_at': started_at,
+                'completed_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
                 'duration_seconds': round(time.perf_counter() - started, 3),
                 'tools': {
+                    'waveform': waveform['duration_seconds'],
                     'mediapipe_pose': pose['duration_seconds'],
                     'opensmile': audio_features['duration_seconds'],
                     'whisper': transcripts['duration_seconds'],
                 },
+                'artifacts': {
+                    'waveform': waveform.get('artifact'),
+                    'metadata': metadata_path,
+                },
+                'errors': failures,
                 'process_peak_rss_mb': self._peak_rss_mb(),
             },
         }
-        self.status.status = 'completed_with_warnings' if warnings else 'completed'
-        self.status.message = '; '.join(str(warning) for warning in warnings) if warnings else 'Processing finished.'
+        self._write_json_artifact(artifact_dir / 'processing.json', result)
+        self.status.status = result['processing']['status']
+        self.status.message = '; '.join(failures) if failures else 'Processing finished.'
         return result
+
+    def _generate_waveform(self, audio_path: Path) -> Dict[str, Any]:
+        bucket_frames = 1600
+        points = []
+        sample_count = 0
+        with wave.open(str(audio_path), 'rb') as audio:
+            if audio.getnchannels() != 1 or audio.getsampwidth() != 2:
+                raise ValueError('Waveform input must be mono 16-bit PCM')
+            sample_rate = audio.getframerate()
+            while frame_bytes := audio.readframes(bucket_frames):
+                samples = [sample[0] for sample in struct.iter_unpack('<h', frame_bytes)]
+                points.append({
+                    'timestamp_seconds': round(sample_count / sample_rate, 3),
+                    'min': min(samples) / 32768.0,
+                    'max': max(samples) / 32768.0,
+                    'rms': math.sqrt(sum(sample * sample for sample in samples) / len(samples)) / 32768.0,
+                })
+                sample_count += len(samples)
+
+        waveform = {
+            'provider': 'FFmpeg waveform',
+            'status': 'completed',
+            'sample_rate_hz': sample_rate,
+            'sample_count': sample_count,
+            'bucket_duration_seconds': bucket_frames / sample_rate,
+            'points': points,
+            'artifact': 'artifacts/waveform.json',
+        }
+        return waveform
+
+    @staticmethod
+    def _write_json_artifact(destination: Path, payload: Dict[str, Any]) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f'.{destination.name}.{uuid.uuid4().hex}.tmp')
+        try:
+            with temporary.open('w', encoding='utf-8') as artifact_file:
+                json.dump(payload, artifact_file, ensure_ascii=True, allow_nan=False)
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _probe_media(self) -> Dict[str, Any]:
         command = [
@@ -264,7 +332,7 @@ class ProcessingJobManager:
         job = {
             'id': job_id,
             'video_id': video_id,
-            'status': 'queued',
+            'status': 'Queued',
             'created_at': now,
             'updated_at': now,
             'result': None,
@@ -281,16 +349,27 @@ class ProcessingJobManager:
             return copy.deepcopy(job) if job else None
 
     def _run_job(self, job_id: str, video_id: str, source_path: Path) -> None:
-        self._update(job_id, status='processing')
+        self._update(job_id, status='Running')
         try:
             result = MultimodalProcessingPipeline(video_id, source_path).run()
-            tool_outputs = (result['pose'], result['audio_features'], result['transcripts'])
-            status = 'completed_with_warnings' if any(
-                output['status'] in ('failed', 'unavailable') for output in tool_outputs
-            ) else 'completed'
-            self._update(job_id, status=status, result=result)
+            failures = result['processing']['errors']
+            status = 'Failed' if failures else 'Completed'
+            self._update(job_id, status=status, result=result, error='; '.join(failures) or None)
         except Exception as error:
-            self._update(job_id, status='failed', error=str(error))
+            failure = str(error)
+            try:
+                MultimodalProcessingPipeline._write_json_artifact(
+                    source_path.parent / 'artifacts' / 'processing.json',
+                    {
+                        'video_id': video_id,
+                        'status': 'Failed',
+                        'updated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                        'error': failure,
+                    },
+                )
+            except OSError:
+                pass
+            self._update(job_id, status='Failed', error=failure)
 
     def _update(self, job_id: str, **updates: Any) -> None:
         with self._lock:

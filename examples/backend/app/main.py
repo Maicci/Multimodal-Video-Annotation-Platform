@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
@@ -71,7 +71,7 @@ class VideoSummaryResponse(BaseModel):
 class ProcessingJobResponse(BaseModel):
     id: str
     video_id: str
-    status: str
+    status: Literal['Queued', 'Running', 'Completed', 'Failed']
     created_at: str
     updated_at: str
     result: Optional[Dict[str, Any]] = None

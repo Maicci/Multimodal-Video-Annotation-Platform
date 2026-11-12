@@ -6,7 +6,9 @@
 
 Install the optional backend set with `python -m pip install -r requirements-ml.txt`. Install FFmpeg and FFprobe separately. Download the [MediaPipe Pose Landmarker Lite task model](https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task) to `models/pose_landmarker_lite.task`, or set `MEDIAPIPE_POSE_MODEL` to its path. Faster-whisper uses `tiny.en` on CPU with int8 by default; set `WHISPER_MODEL` to choose another model. The first Whisper run downloads its model.
 
-Create a video using `POST /api/videos`, upload the media as multipart field `file` to `POST /api/videos/{video_id}/upload`, then start work with `POST /api/videos/{video_id}/processing`. The response contains a job ID; poll `GET /api/processing/jobs/{job_id}` for `queued`, `processing`, `completed`, `completed_with_warnings`, or `failed`. Uploads are limited to 1 GiB and `.mp4`, `.mov`, `.mkv`, or `.webm` extensions.
+Create a video using `POST /api/videos`, upload the media as multipart field `file` to `POST /api/videos/{video_id}/upload`, then start work with `POST /api/videos/{video_id}/processing`. The response contains a job ID; poll `GET /api/processing/jobs/{job_id}` for `Queued`, `Running`, `Completed`, or `Failed`. The request only queues work: waveform generation and the lazily loaded faster-whisper model run in the background worker. Tool failures are included in the job's `error` field and processing metadata. Uploads are limited to 1 GiB and `.mp4`, `.mov`, `.mkv`, or `.webm` extensions.
+
+Per-video artifacts are written beside the uploaded source under `artifacts/`. `waveform.json` contains 100 ms min/max/RMS amplitude buckets; `processing.json` retains the normalized automatic outputs, tool timings, timestamps, artifact references, and any processor errors for backend/export use. Annotation-facing segment and summary data remains user-authored; automatic pose, audio-feature, transcript, and waveform data is not rendered in the annotator interface.
 
 The queue and job state live only in this server process. Restarting the server loses job status; this is deliberately a minimal prototype, not a durable queue or a multi-worker deployment.
 
@@ -22,7 +24,8 @@ All timestamps are seconds from the media start. Each tool has `provider`, `stat
 - `audio_features`: `feature_set: eGeMAPSv02`, `feature_level: functionals`, `sample_rate_hz`, and `windows`; each window has start/end seconds and a feature-name-to-number `values` object. The current functionals level yields one full-clip window (88 values for the selected configuration).
 - `transcripts`: model, language, language probability, and `segments`; each segment has `start_seconds`, `end_seconds`, and `text`.
 - `source_metadata`: filename, duration, dimensions, frame rate, video codec, and optional audio codec/sample rate.
-- `processing`: end-to-end duration, tool durations, and process peak resident memory where Linux `/proc` is available.
+- `waveform`: sample rate, sample count, 100 ms amplitude buckets, and the persisted waveform artifact path.
+- `processing`: canonical job status, start/end timestamps, end-to-end and tool durations, artifact references, errors, and process peak resident memory where Linux `/proc` is available.
 
 ## Sample measurement
 

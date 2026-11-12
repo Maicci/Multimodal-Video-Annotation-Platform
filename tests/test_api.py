@@ -53,6 +53,7 @@ def test_upload_and_background_processing_job(tmp_path, monkeypatch):
             'pose': {'status': 'completed'},
             'audio_features': {'status': 'completed'},
             'transcripts': {'status': 'completed'},
+            'processing': {'errors': []},
         },
     )
     created = client.post('/api/videos', json={
@@ -75,11 +76,45 @@ def test_upload_and_background_processing_job(tmp_path, monkeypatch):
     job_id = started.json()['id']
     deadline = time.monotonic() + 2
     job = client.get(f'/api/processing/jobs/{job_id}').json()
-    while job['status'] in ('queued', 'processing') and time.monotonic() < deadline:
+    while job['status'] in ('Queued', 'Running') and time.monotonic() < deadline:
         job = client.get(f'/api/processing/jobs/{job_id}').json()
 
-    assert job['status'] == 'completed'
+    assert job['status'] == 'Completed'
     assert job['result']['video_id'] == video_id
+
+
+def test_processing_failure_is_exposed_by_job_api(tmp_path, monkeypatch):
+    from app.services.multimodal_processing import MultimodalProcessingPipeline
+
+    monkeypatch.setattr('examples.backend.app.main.UPLOAD_DIR', tmp_path)
+    monkeypatch.setattr(
+        MultimodalProcessingPipeline,
+        'run',
+        lambda self: {
+            'video_id': self.video_id,
+            'processing': {'errors': ['faster-whisper: model unavailable']},
+        },
+    )
+    created = client.post('/api/videos', json={
+        'title': 'Failed processing',
+        'filename': 'sample.mp4',
+        'annotator_id': 'annotator-1',
+    })
+    video_id = created.json()['id']
+    client.post(
+        f'/api/videos/{video_id}/upload',
+        files={'file': ('sample.mp4', b'prototype video bytes', 'video/mp4')},
+    )
+
+    started = client.post(f'/api/videos/{video_id}/processing')
+    job_id = started.json()['id']
+    deadline = time.monotonic() + 2
+    job = client.get(f'/api/processing/jobs/{job_id}').json()
+    while job['status'] in ('Queued', 'Running') and time.monotonic() < deadline:
+        job = client.get(f'/api/processing/jobs/{job_id}').json()
+
+    assert job['status'] == 'Failed'
+    assert job['error'] == 'faster-whisper: model unavailable'
 
 
 def test_upload_rejects_unsupported_file_type(tmp_path, monkeypatch):
