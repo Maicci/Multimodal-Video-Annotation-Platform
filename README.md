@@ -1,6 +1,6 @@
 # Multimodal Video Annotation Platform
 
-This repository contains a Python-based research prototype for a browser-driven multimodal video annotation system.
+This repository contains a Python-based research prototype for a browser-driven multimodal video annotation system. The runnable FastAPI example lives in `examples/`, alongside the application in `backend/` and browser client in `frontend/`.
 
 ## Features in this initial prototype
 
@@ -45,3 +45,4 @@ The platform is designed to evolve toward:
 - multimodal alignment for pose, acoustic features, and speech transcripts
 - multi-user annotation with independent data stores
 - export and agreement reporting
+
