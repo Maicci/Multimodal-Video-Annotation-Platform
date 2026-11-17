@@ -10,7 +10,11 @@ import subprocess
 
 import psycopg
 from app.db.database import Database
-from app.repositories.video_repository import start_video_processing
+from app.repositories.video_repository import (
+    fail_video_processing,
+    save_timeline_info,
+    start_video_processing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,15 @@ def generate_thumbnails(
         check=True,
     )
 
+
+def _mark_failed(database_url: str, video_id: str) -> None:
+    try:
+        with closing(Database(database_url).connect()) as connection:
+            fail_video_processing(connection, video_id)
+    except psycopg.Error:
+        logger.exception("Could not mark video %s as failed", video_id)
+
+
 def process_video(video_id: str, database_url: str, video_path: str | Path, timeline_path: str | Path, thumbnails_dir: str | Path) -> None:
     try:
         with closing(Database(database_url).connect()) as connection:
@@ -65,9 +78,26 @@ def process_video(video_id: str, database_url: str, video_path: str | Path, time
     except psycopg.Error:
         logger.exception("Could not update processing status for video %s", video_id)
         return
-    timeline = FrameTimeline.from_video(video_path)
-    Path(timeline_path).parent.mkdir(parents=True, exist_ok=True)
-    timeline.save(timeline_path)
-    generate_thumbnails(video_path, thumbnails_dir)
-    
+
+    try:
+        timeline = FrameTimeline.from_video(video_path)
+        Path(timeline_path).parent.mkdir(parents=True, exist_ok=True)
+        timeline.save(timeline_path)
+
+        # Record the timeline in the database right after it is saved
+        with closing(Database(database_url).connect()) as connection:
+            save_timeline_info(
+                connection,
+                video_id,
+                timeline_path=str(timeline_path),
+                frame_count=timeline.frame_count,
+                is_vfr=not timeline.is_constant_frame_rate(),
+            )
+
+        generate_thumbnails(video_path, thumbnails_dir)
+    except Exception:
+        logger.exception("Processing failed for video %s", video_id)
+        _mark_failed(database_url, video_id)
+        return
+
     logger.info("Video %s is ready for asynchronous processing", video_id)

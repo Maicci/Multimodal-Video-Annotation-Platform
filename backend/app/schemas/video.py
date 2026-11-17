@@ -12,3 +12,11 @@ class VideoUploadResponse(BaseModel):
     filename: str
     status: str
     duration: float | None
+
+class VideoListItem(BaseModel):
+    id: UUID
+    filename: str
+    size_bytes: int
+    status: str
+    uploaded_at: str
+    duration: float | None = None

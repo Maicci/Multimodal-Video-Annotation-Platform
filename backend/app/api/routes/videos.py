@@ -10,15 +10,17 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.api.dependencies import Connection, CurrentUser, get_settings
 from app.core.config import Settings
 from app.repositories.video_repository import (
     create_video,
+    delete_video,
     find_video_by_filename,
+    list_videos,
 )
-from app.schemas.video import VideoUploadResponse
+from app.schemas.video import VideoListItem, VideoUploadResponse
 from app.services.video_metadata import (
     VideoMetadataError,
     extract_video_metadata,
@@ -27,6 +29,7 @@ from app.services.video_processing import process_video
 from app.services.video_storage import (
     VideoTooLargeError,
     remove_stored_video,
+    remove_video_files,
     store_video,
 )
 
@@ -42,6 +45,54 @@ def _error(status_code: int, error: str, **extra: object) -> JSONResponse:
         content={"error": error, **extra},
     )
 
+@router.get("", response_model=list[VideoListItem])
+def list_all_videos(
+    connection: Connection,
+    user: CurrentUser,
+) -> list[VideoListItem]:
+    return [
+        VideoListItem(
+            id=UUID(v.id),
+            filename=v.original_filename,
+            size_bytes=v.file_size_bytes,
+            status=v.processing_status,
+            uploaded_at=v.upload_time,
+            duration=v.duration_seconds,
+        )
+        for v in list_videos(connection)
+    ]
+
+@router.delete(
+    "/{video_id}",
+    status_code=204,
+    response_model=None,
+    responses={
+        403: {"description": "Administrator role required"},
+        404: {"description": "Video not found"},
+        409: {"description": "Video still has related data"},
+    },
+)
+def remove_video(
+    video_id: UUID,
+    connection: Connection,
+    user: CurrentUser,
+) -> Response:
+    if user.get("role") != "administrator":
+        return _error(403, "Administrator role required")
+
+    try:
+        video = delete_video(connection, str(video_id))
+    except psycopg.errors.ForeignKeyViolation:
+        return _error(409, "Video still has related data")
+    except psycopg.Error:
+        logger.exception("Could not delete video %s", video_id)
+        return _error(500, "Database failure")
+
+    if video is None:
+        return _error(404, "Video not found")
+
+    remove_video_files(Path(video.storage_path))
+    return Response(status_code=204)
 
 @router.post(
     "/upload",
@@ -55,6 +106,8 @@ def _error(status_code: int, error: str, **extra: object) -> JSONResponse:
         500: {"description": "Storage, metadata, or database failure"},
     },
 )
+
+
 def upload_video(
     background_tasks: BackgroundTasks,
     upload: Annotated[UploadFile, File()],

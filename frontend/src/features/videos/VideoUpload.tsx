@@ -3,7 +3,9 @@
 
 import { useState } from "react";
 
-function VideoUpload() {
+type Props = { onUploaded: () => void };
+
+function VideoUpload({ onUploaded }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -54,7 +56,6 @@ function VideoUpload() {
     }
 
     const formData = new FormData();
-
     formData.append("upload", file);
 
     try {
@@ -74,14 +75,15 @@ function VideoUpload() {
       if (!response.ok) {
         throw new Error(data.error || "Video upload failed.");
       }
-
+      
       console.log("Uploaded video:", data);
 
       setSuccessMessage(
-        `Video "${data.filename}" uploaded successfully. Status: ${data.status}`
+        `Video "${data.filename}" uploaded successfully.`
       );
 
       setFile(null);
+      onUploaded(); // only now: tells AdminPage to reload the list
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -62,3 +63,21 @@ def remove_stored_video(stored_video: StoredVideo) -> None:
         stored_video.path.unlink(missing_ok=True)
     except OSError:
         logger.exception("Could not remove stored video %s", stored_video.path)
+
+
+def remove_video_files(video_path: Path) -> None:
+    """Delete a stored video and the related files.
+    Layout
+        <root>/original/<stem>.<ext>   the video itself
+        <root>/timelines/<stem>.npy    frame timeline
+        <root>/thumbnails/<stem>/      thumbnail images
+    Missing files are fine; problems are logged, never raised.
+    """
+    root = video_path.parent.parent
+    stem = video_path.stem
+    try:
+        video_path.unlink(missing_ok=True)
+        (root / "timelines" / f"{stem}.npy").unlink(missing_ok=True)
+        shutil.rmtree(root / "thumbnails" / stem, ignore_errors=True)
+    except OSError:
+        logger.exception("Could not remove files of video %s", video_path)

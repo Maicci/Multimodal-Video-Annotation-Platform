@@ -14,46 +14,15 @@ from app.services.video_storage import StoredVideo
 
 # TODO queries need to be updated when the database structure is decided
 
-def find_video_by_filename(
-    connection: psycopg.Connection[dict[str, Any]], original_filename: str
-) -> str | None:
-    row = connection.execute(
-        "SELECT id FROM videos WHERE original_filename = %s",
-        (original_filename,),
-    ).fetchone()
-    return None if row is None else str(row["id"])
 
-def find_video_by_id(
-    connection: psycopg.Connection[dict[str, Any]],
-    video_id: str,
-) -> Video | None:
-    row = connection.execute(
-        """
-        SELECT
-            id,
-            original_filename,
-            stored_filename,
-            storage_path,
-            uploader_id,
-            upload_time,
-            file_size_bytes,
-            mime_type,
-            duration_seconds,
-            width,
-            height,
-            fps,
-            codec,
-            processing_status,
-            metadata_extracted
-        FROM videos
-        WHERE id = %s
-        """,
-        (video_id,),
-    ).fetchone()
+_VIDEO_COLUMNS = """
+    id, original_filename, stored_filename, storage_path, uploader_id,
+    upload_time, file_size_bytes, mime_type, duration_seconds, width,
+    height, fps, codec, processing_status, metadata_extracted
+"""
 
-    if row is None:
-        return None
 
+def _row_to_video(row: dict[str, Any]) -> Video:
     return Video(
         id=str(row["id"]),
         original_filename=row["original_filename"],
@@ -73,8 +42,36 @@ def find_video_by_id(
     )
 
 
+def find_video_by_filename(
+    connection: psycopg.Connection[dict[str, Any]], original_filename: str
+) -> str | None:
+    row = connection.execute(
+        "SELECT id FROM videos WHERE original_filename = %s",
+        (original_filename,),
+    ).fetchone()
+    return None if row is None else str(row["id"])
+
+
+def find_video_by_id(
+    connection: psycopg.Connection[dict[str, Any]],
+    video_id: str,
+) -> Video | None:
+    row = connection.execute(
+        f"SELECT {_VIDEO_COLUMNS} FROM videos WHERE id = %s",
+        (video_id,),
+    ).fetchone()
+    return None if row is None else _row_to_video(row)
+
+
+def list_videos(connection: psycopg.Connection[dict[str, Any]]) -> list[Video]:
+    rows = connection.execute(
+        f"SELECT {_VIDEO_COLUMNS} FROM videos ORDER BY upload_time DESC"
+    ).fetchall()
+    return [_row_to_video(row) for row in rows]
+
+
 def create_video(
-    connection: psycopg.Connection,
+    connection: psycopg.Connection[dict[str, Any]],
     *,
     original_filename: str,
     uploader_id: str,
@@ -85,8 +82,8 @@ def create_video(
     video_id = str(uuid4())
     upload_time = datetime.now(timezone.utc)
     with connection:
-        connection.execute(
-            """
+        row = connection.execute(
+            f"""
             INSERT INTO videos (
                 id, title, original_filename, stored_filename, storage_path,
                 uploader_id, upload_time, file_size_bytes, mime_type,
@@ -95,6 +92,7 @@ def create_video(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     'PENDING', TRUE, %s)
+            RETURNING {_VIDEO_COLUMNS}
             """,
             (
                 video_id,
@@ -113,24 +111,25 @@ def create_video(
                 metadata.codec,
                 upload_time,
             ),
-        )
-    return Video(
-        id=video_id,
-        original_filename=original_filename,
-        stored_filename=stored_video.filename,
-        storage_path=str(stored_video.path),
-        uploader_id=uploader_id,
-        upload_time=upload_time.isoformat(),
-        file_size_bytes=stored_video.size_bytes,
-        mime_type=mime_type,
-        duration_seconds=metadata.duration_seconds,
-        width=metadata.width,
-        height=metadata.height,
-        fps=metadata.fps,
-        codec=metadata.codec,
-        processing_status="PENDING",
-        metadata_extracted=True,
-    )
+        ).fetchone()
+
+    if row is None:  # an INSERT ... RETURNING should always give the row back
+        raise RuntimeError("Video insert returned no row")
+    return _row_to_video(row)
+
+def delete_video(
+    connection: psycopg.Connection[dict[str, Any]], video_id: str
+) -> Video | None:
+    """Delete the row and return it (so the caller can remove its files).
+
+    Returns None when no video with this id exists.
+    """
+    with connection:
+        row = connection.execute(
+            f"DELETE FROM videos WHERE id = %s RETURNING {_VIDEO_COLUMNS}",
+            (video_id,),
+        ).fetchone()
+    return None if row is None else _row_to_video(row)
 
 
 def start_video_processing(
@@ -146,3 +145,34 @@ def start_video_processing(
             (datetime.now(timezone.utc), video_id),
         )
     return result.rowcount == 1
+
+
+def save_timeline_info(
+    connection: psycopg.Connection,
+    video_id: str,
+    *,
+    timeline_path: str,
+    frame_count: int,
+    is_vfr: bool,
+) -> None:
+    with connection:
+        connection.execute(
+            """
+            UPDATE videos
+            SET timeline_path = %s, frame_count = %s, is_vfr = %s, updated_at = %s
+            WHERE id = %s
+            """,
+            (timeline_path, frame_count, is_vfr, datetime.now(timezone.utc), video_id),
+        )
+
+
+def fail_video_processing(connection: psycopg.Connection, video_id: str) -> None:
+    with connection:
+        connection.execute(
+            """
+            UPDATE videos
+            SET processing_status = 'FAILED', updated_at = %s
+            WHERE id = %s
+            """,
+            (datetime.now(timezone.utc), video_id),
+        )

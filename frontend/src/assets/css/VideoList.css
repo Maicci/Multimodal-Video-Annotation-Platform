@@ -76,3 +76,12 @@
 .view-button:hover {
   background-color: #374151;
 }
+
+.delete-button {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.delete-button:hover {
+  background-color: #5f1e1e;
+}

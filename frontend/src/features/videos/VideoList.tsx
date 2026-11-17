@@ -1,30 +1,18 @@
-// Displays the administrator's video list.
-// Shows basic video information, processing status, annotation progress, etc.
-
-import "../../assets/css/VideoList.css";
-
-type Video = {
-  id: number;
+export type VideoItem = {
+  id: string;
   filename: string;
-  size: string;
-  status: "Processing" | "Ready";
-  uploaded: string;
-  annotations: string;
+  size_bytes: number;
+  status: string;
+  uploaded_at: string;
+  duration: number | null;
 };
 
-const videos: Video[] = [
+type Props = {
+  videos: VideoItem[];
+  onDelete: (video: VideoItem) => void;
+};
 
-  {
-    id: 3,
-    filename: "Example.mov",
-    size: "210 MB",
-    status: "Processing",
-    uploaded: "2026-10-22 14:33",
-    annotations: "5 / 12",
-  },
-];
-
-function VideoList() {
+function VideoList({ videos, onDelete }: Props) {
   return (
     <section className="video-list">
       <h2>Video list</h2>
@@ -41,31 +29,34 @@ function VideoList() {
               <th>Actions</th>
             </tr>
           </thead>
-
           <tbody>
-            {videos.map((video) => (
-              <tr key={video.id}>
-                <td>{video.filename}</td>
-                <td>{video.size}</td>
+            {videos.length === 0 && (
+              <tr>
+                <td colSpan={6}>No videos uploaded yet.</td>
+              </tr>
+            )}
 
+            {videos.map((v) => (
+              <tr key={v.id}>
+                <td>{v.filename}</td>
+                <td>{(v.size_bytes / 1024 / 1024).toFixed(2)} MB</td>
                 <td>
-                  <span
-                    className={
-                      video.status === "Ready"
-                        ? "video-status ready"
-                        : "video-status processing"
-                    }
-                  >
-                    {video.status}
+                  <span className={`video-status ${v.status.toLowerCase()}`}>
+                    {v.status}
                   </span>
                 </td>
-
-                <td>{video.uploaded}</td>
-                <td>{video.annotations}</td>
-
+                <td>{new Date(v.uploaded_at).toLocaleString()}</td>
+                <td>—</td>
                 <td>
                   <button type="button" className="view-button">
                     View
+                  </button>{" "}
+                  <button
+                    type="button"
+                    className="view-button delete-button"
+                    onClick={() => onDelete(v)}
+                  >
+                    Delete
                   </button>
                 </td>
               </tr>

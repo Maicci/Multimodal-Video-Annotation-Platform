@@ -1,16 +1,83 @@
 // Main administrator page.
 // Combines the video upload interface and the list of uploaded videos.
 
+import { useCallback, useEffect, useState } from "react";
 import VideoUpload from "../features/videos/VideoUpload";
-import VideoList from "../features/videos/VideoList";
+import VideoList, { type VideoItem } from "../features/videos/VideoList";
+
+const API_URL = "http://127.0.0.1:8000";
 
 function AdminPage() {
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [listError, setListError] = useState("");
+
+  const loadVideos = useCallback(async () => {
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      setListError("You must be logged in to see the video list.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/videos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setVideos(await res.json());
+      setListError("");
+    } catch (err) {
+      console.error("Video list request failed:", err);
+      setListError("Could not reach the server.");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadVideos();
+  }, [loadVideos]);
+
+  const deleteVideo = useCallback(
+    async (video: VideoItem) => {
+      const confirmed = window.confirm(
+        `Delete "${video.filename}"? The video and its data are removed permanently.`
+      );
+      if (!confirmed) return;
+
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        setListError("You must be logged in to delete videos.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/api/videos/${video.id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          console.error("Delete failed:", res.status, await res.text());
+          setListError(`Could not delete the video (status ${res.status}).`);
+          return;
+        }
+
+        await loadVideos(); // refresh the list from the database
+      } catch (err) {
+        console.error("Delete request failed:", err);
+        setListError("Could not reach the server.");
+      }
+    },
+    [loadVideos]
+  );
+
   return (
     <main>
       <h1>Admin Page</h1>
 
-      <VideoUpload />
-      <VideoList />
+      <VideoUpload onUploaded={loadVideos} />
+
+      {listError && <p>{listError}</p>}
+      <VideoList videos={videos} onDelete={deleteVideo} />
     </main>
   );
 }
