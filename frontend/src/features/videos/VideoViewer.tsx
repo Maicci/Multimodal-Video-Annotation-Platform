@@ -231,7 +231,15 @@ function VideoViewer({ videoId }: Props) {
         currentTime={currentTime}
         duration={duration}
         onTimeChange={handleTimelineChange}
+        selection={draft.end_time > draft.start_time
+          ? { start: draft.start_time, end: draft.end_time }
+          : null}
+        onSelectionChange={(start_time, end_time) => {
+          setDraft((current) => ({ ...current, start_time, end_time }));
+          setMessage("");
+        }}
       />
+      <p className="timeline-hint">Drag the blue start bar or orange end bar to set the segment range.</p>
 
       <section className="annotation-details">
         <h2>{selectedId ? "Edit segment" : "New segment"}</h2>

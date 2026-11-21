@@ -55,6 +55,19 @@
 
 .segment-item.active {
   background-color: #eef5ff;
+  border-color: #79a9ed;
+  color: #152238;
+}
+
+.segment-item.active strong,
+.segment-item.active span {
+  color: #152238;
+}
+
+.timeline-hint {
+  margin-top: -12px;
+  font-size: 14px;
+  text-align: left;
 }
 
 .timeline {
