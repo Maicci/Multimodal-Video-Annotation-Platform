@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import VideoUpload from "../features/videos/VideoUpload";
 import VideoList, { type VideoItem } from "../features/videos/VideoList";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function AdminPage({ onView, onSignOut }: { onView: (id: string) => void; onSignOut: () => void }) {
   const [videos, setVideos] = useState<VideoItem[]>([]);

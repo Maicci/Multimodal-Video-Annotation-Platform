@@ -13,7 +13,7 @@ type SegmentInput = {
 
 type Segment = SegmentInput & { id: string; video_id: string; author_id: string };
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function VideoViewer({ videoId }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);

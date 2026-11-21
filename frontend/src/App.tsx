@@ -3,7 +3,7 @@ import AdminPage from "./pages/AdminPage";
 import LoginPage from "./pages/LoginPage";
 import VideoViewer from "./features/videos/VideoViewer";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function App() {
   const [videoId, setVideoId] = useState<string | null>(null);
