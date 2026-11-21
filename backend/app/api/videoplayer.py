@@ -2,6 +2,7 @@
 
 """
 from app.repositories.video_repository import find_video_by_id
+from app.db.models.video import Video
 from app.api.dependencies import Connection
 from app.services.frame_timing import FrameTimeline
 from pathlib import Path
@@ -9,7 +10,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 router = APIRouter()
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+def _timeline_path(video: Video) -> Path:
+    return Path(video.storage_path).parent.parent / "timelines" / f"{Path(video.stored_filename).stem}.npy"
+
+
+def _thumbnail_path(video: Video, thumbnail: int) -> Path:
+    return Path(video.storage_path).parent.parent / "thumbnails" / Path(video.stored_filename).stem / f"{thumbnail}.jpg"
 
 
 # Route to stream the video
@@ -47,15 +54,7 @@ def get_timeline(video_id: str, connection: Connection):
             detail="Video not found",
         )
 
-    video_stem = Path(video.stored_filename).stem
-
-    timeline_path = (
-        PROJECT_ROOT
-        / "storage"
-        / "videos"
-        / "timelines"
-        / f"{video_stem}.npy"
-    )
+    timeline_path = _timeline_path(video)
 
     if not timeline_path.exists():
         raise HTTPException(
@@ -85,15 +84,7 @@ def get_frame(
             detail="Video not found",
         )
 
-    video_stem = Path(video.stored_filename).stem
-
-    timeline_path = (
-        PROJECT_ROOT
-        / "storage"
-        / "videos"
-        / "timelines"
-        / f"{video_stem}.npy"
-    )
+    timeline_path = _timeline_path(video)
 
     if not timeline_path.exists():
         raise HTTPException(
@@ -123,15 +114,7 @@ def get_frame_time(
             detail="Video not found",
         )
 
-    video_stem = Path(video.stored_filename).stem
-
-    timeline_path = (
-        PROJECT_ROOT
-        / "storage"
-        / "videos"
-        / "timelines"
-        / f"{video_stem}.npy"
-    )
+    timeline_path = _timeline_path(video)
 
     if not timeline_path.exists():
         raise HTTPException(
@@ -160,16 +143,7 @@ def get_thumbnail(
             detail="Video not found",
         )
 
-    video_stem = Path(video.stored_filename).stem
-
-    thumbnail_path = (
-        PROJECT_ROOT
-        / "storage"
-        / "videos"
-        / "thumbnails"
-        / video_stem
-        / f"{thumbnail}.jpg"
-    )
+    thumbnail_path = _thumbnail_path(video, thumbnail)
 
     if not thumbnail_path.exists():
         raise HTTPException(

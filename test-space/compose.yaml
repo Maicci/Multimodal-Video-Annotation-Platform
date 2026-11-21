@@ -29,6 +29,11 @@ services:
       - test_videos:/workspace/storage/videos
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
     depends_on:
       db:
         condition: service_healthy
@@ -39,15 +44,34 @@ services:
       context: ..
       dockerfile: test-space/frontend.Dockerfile
     environment:
-      VITE_API_URL: http://127.0.0.1:8000
+      VITE_API_PROXY_TARGET: http://backend:8000
     volumes:
       - ../frontend:/workspace/frontend
       - frontend_modules:/workspace/frontend/node_modules
     ports:
       - "127.0.0.1:5173:5173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+  e2e:
+    profiles: ["e2e"]
+    build:
+      context: ..
+      dockerfile: test-space/e2e.Dockerfile
+    environment:
+      BASE_URL: http://frontend:5173
+      TEST_ADMIN_EMAIL: admin@example.com
+      TEST_ADMIN_PASSWORD: test-password-123
+    depends_on:
+      frontend:
+        condition: service_healthy
 
 volumes:
   test_db:
