@@ -29,6 +29,7 @@ function VideoViewer({ videoId }: Props) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -154,6 +155,37 @@ function VideoViewer({ videoId }: Props) {
     }
   }
 
+  async function deleteSelectedSegment() {
+    if (!selectedId || !window.confirm(`Delete segment "${draft.title}"?`)) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setError("Sign in again to delete this segment.");
+      return;
+    }
+    setDeleting(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(
+        `${API_URL}/api/videos/${videoId}/segments/${selectedId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) throw new Error(`Could not delete segment (${response.status}).`);
+      const remaining = segments.filter((item) => item.id !== selectedId);
+      setSegments(remaining);
+      if (remaining.length > 0) {
+        selectSegment(remaining[0]);
+      } else {
+        newSegment();
+      }
+      setMessage("Segment deleted.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not delete segment.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <section className="annotation-workspace">
       <div className="top-row">
@@ -230,9 +262,16 @@ function VideoViewer({ videoId }: Props) {
         </div>
         {error && <p role="alert">{error}</p>}
         {message && <p role="status">{message}</p>}
-        <button type="button" onClick={saveSegment} disabled={saving || duration <= 0}>
-          {saving ? "Saving…" : "Save segment"}
-        </button>
+        <div className="segment-actions">
+          <button type="button" onClick={saveSegment} disabled={saving || deleting || duration <= 0}>
+            {saving ? "Saving…" : "Save segment"}
+          </button>
+          {selectedId && (
+            <button type="button" onClick={deleteSelectedSegment} disabled={saving || deleting}>
+              {deleting ? "Deleting…" : "Delete segment"}
+            </button>
+          )}
+        </div>
       </section>
     </section>
   );

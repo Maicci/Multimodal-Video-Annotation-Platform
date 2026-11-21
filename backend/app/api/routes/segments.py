@@ -1,4 +1,4 @@
-"""Create, list, and edit annotations for a video."""
+"""Create, list, edit, and delete annotations for a video."""
 
 from uuid import UUID
 
@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import Connection, CurrentUser
 from app.repositories.segment_repository import (
-    create_segment, list_segments, update_segment,
+    create_segment, delete_segment, list_segments, update_segment,
 )
 from app.repositories.video_repository import find_video_by_id
 from app.schemas.segment import SegmentInput, SegmentResponse
@@ -62,3 +62,16 @@ def edit_segment(
     if saved is None:
         raise HTTPException(status_code=404, detail="Segment not found")
     return saved
+
+
+@router.delete("/{segment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_segment(
+    video_id: UUID, segment_id: UUID, connection: Connection, user: CurrentUser,
+) -> None:
+    _require_editor(user)
+    _video_or_404(connection, video_id)
+    deleted = delete_segment(
+        connection, str(segment_id), str(video_id), str(user["id"]),
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Segment not found")

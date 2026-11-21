@@ -42,7 +42,7 @@ in the `Authorization` header.
 - Saved segment creation/editing for annotators and administrators
 
 The current segment API is `GET`/`POST /api/videos/{video_id}/segments` and
-`PUT /api/videos/{video_id}/segments/{segment_id}`. Segments contain a title,
+`PUT`/`DELETE /api/videos/{video_id}/segments/{segment_id}`. Segments contain a title,
 start and end times in seconds, and a description. Each signed-in user sees
 their own segments. Annotators and administrators can create and edit them.
 

@@ -77,6 +77,11 @@
   margin-bottom: 20px;
 }
 
+.segment-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .annotation-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

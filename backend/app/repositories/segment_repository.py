@@ -59,3 +59,19 @@ def update_segment(
                 payload.description, segment_id, video_id, author_id,
             ),
         ).fetchone()
+
+
+def delete_segment(
+    connection: psycopg.Connection[Any], segment_id: str, video_id: str,
+    author_id: str,
+) -> bool:
+    with connection:
+        row = connection.execute(
+            """
+            DELETE FROM segments
+            WHERE id = %s AND video_id = %s AND author_id = %s
+            RETURNING id
+            """,
+            (segment_id, video_id, author_id),
+        ).fetchone()
+    return row is not None

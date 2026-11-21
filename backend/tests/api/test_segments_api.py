@@ -83,3 +83,10 @@ def test_segments_save_reload_edit_and_isolate_users(client: TestClient) -> None
     other = _login(client, "other@example.com", "secure-test-password-123")
     assert client.get(url, headers=_auth(other)).json() == []
     assert client.put(f"{url}/{segment_id}", headers=_auth(other), json=payload).status_code == 404
+    assert client.delete(f"{url}/{segment_id}", headers=_auth(other)).status_code == 404
+    assert client.get(url, headers=_auth(admin)).json()[0]["id"] == segment_id
+
+    deleted = client.delete(f"{url}/{segment_id}", headers=_auth(admin))
+    assert deleted.status_code == 204, deleted.text
+    assert client.get(url, headers=_auth(admin)).json() == []
+    assert client.delete(f"{url}/{segment_id}", headers=_auth(admin)).status_code == 404

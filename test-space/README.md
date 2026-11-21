@@ -39,6 +39,7 @@ becomes available after processing reaches `COMPLETED`.
 To test annotation saving, open a completed video, choose **+ New segment**,
 enter a title, time range, and description, then choose **Save segment**. Go
 back to the video list and reopen the video; the saved segment should appear.
+To remove one, select it and choose **Delete segment**.
 
 After rebuilding the backend image, run the segment API test with
 `docker compose -f test-space/compose.yaml exec backend python -m pytest backend/tests/api/test_segments_api.py`.
