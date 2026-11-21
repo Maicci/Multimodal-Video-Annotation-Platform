@@ -1,0 +1,11 @@
+.upload-progress {
+  margin: 12px auto;
+  max-width: 360px;
+}
+
+.upload-progress progress {
+  display: block;
+  width: 100%;
+  height: 16px;
+  accent-color: #4f8fff;
+}
