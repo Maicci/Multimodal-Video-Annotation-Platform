@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 
-function LoginPage() {
+function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -37,10 +37,7 @@ function LoginPage() {
       }
 
       localStorage.setItem("access_token", data.access_token);
-
-      console.log("Login successful");
-
-      window.location.href = "/";
+      onLogin(data.access_token);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);

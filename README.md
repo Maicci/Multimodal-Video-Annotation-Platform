@@ -2,6 +2,9 @@
 
 This repository contains a Python-based research prototype for a browser-driven multimodal video annotation system. The runnable FastAPI example lives in `examples/`, alongside the application in `backend/` and browser client in `frontend/`.
 
+To try the current frontend and backend together, use the Docker setup in
+[`test-space/README.md`](test-space/README.md).
+
 ## Features in this initial prototype
 
 - FastAPI backend with health and video APIs

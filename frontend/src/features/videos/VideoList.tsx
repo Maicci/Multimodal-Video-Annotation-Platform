@@ -10,9 +10,10 @@ export type VideoItem = {
 type Props = {
   videos: VideoItem[];
   onDelete: (video: VideoItem) => void;
+  onView: (id: string) => void;
 };
 
-function VideoList({ videos, onDelete }: Props) {
+function VideoList({ videos, onDelete, onView }: Props) {
   return (
     <section className="video-list">
       <h2>Video list</h2>
@@ -48,7 +49,7 @@ function VideoList({ videos, onDelete }: Props) {
                 <td>{new Date(v.uploaded_at).toLocaleString()}</td>
                 <td>—</td>
                 <td>
-                  <button type="button" className="view-button">
+                  <button type="button" className="view-button" onClick={() => onView(v.id)} disabled={v.status !== "COMPLETED"}>
                     View
                   </button>{" "}
                   <button

@@ -57,7 +57,28 @@ class Database:
                     codec TEXT,
                     processing_status TEXT NOT NULL,
                     metadata_extracted BOOLEAN NOT NULL DEFAULT FALSE,
+                    timeline_path TEXT,
+                    frame_count INTEGER,
+                    is_vfr BOOLEAN,
                     updated_at TIMESTAMPTZ NOT NULL
+                )
+                """
+            )
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS timeline_path TEXT")
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS frame_count INTEGER")
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_vfr BOOLEAN")
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS segments (
+                    id UUID PRIMARY KEY,
+                    video_id UUID NOT NULL REFERENCES videos (id) ON DELETE CASCADE,
+                    author_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    title VARCHAR(120) NOT NULL,
+                    start_time DOUBLE PRECISION NOT NULL CHECK (start_time >= 0),
+                    end_time DOUBLE PRECISION NOT NULL CHECK (end_time > start_time),
+                    description TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )

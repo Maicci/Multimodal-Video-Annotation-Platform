@@ -44,14 +44,30 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  text-align: left;
   padding: 12px;
   margin-top: 10px;
   border: 1px solid #ddd;
   border-radius: 6px;
+  cursor: pointer;
 }
 
 .segment-item.active {
   background-color: #eef5ff;
+  border-color: #79a9ed;
+  color: #152238;
+}
+
+.segment-item.active strong,
+.segment-item.active span {
+  color: #152238;
+}
+
+.timeline-hint {
+  margin-top: -12px;
+  font-size: 14px;
+  text-align: left;
 }
 
 .timeline {
@@ -65,6 +81,18 @@
   border: 1px solid #ddd;
   border-radius: 8px;
   padding: 20px;
+}
+
+.annotation-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.segment-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .annotation-grid {

@@ -1,15 +1,19 @@
-// Main video player component for the annotation workspace.
-// Streams the selected video, tracks playback time and frame number
-// Connects playback to the interactive timeline, and displays annotation controls.
-
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "../../assets/css/VideoViewer.css";
 import FrameTimeline from "./FrameTimelines";
 
-// videoId is a number that identifies a specific video to be annotated
-type Props = {
-  videoId: string;
+type Props = { videoId: string };
+
+type SegmentInput = {
+  title: string;
+  start_time: number;
+  end_time: number;
+  description: string;
 };
+
+type Segment = SegmentInput & { id: string; video_id: string; author_id: string };
+
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function VideoViewer({ videoId }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -17,55 +21,168 @@ function VideoViewer({ videoId }: Props) {
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
-  // The API URL is defined in the .env file
-  const API_URL = import.meta.env.VITE_API_URL;
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<SegmentInput>({
+    title: "", start_time: 0, end_time: 0, description: "",
+  });
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/videos/${videoId}/segments`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not load segments (${response.status}).`);
+        return response.json() as Promise<Segment[]>;
+      })
+      .then((items) => {
+        setSegments(items);
+        if (items.length > 0) {
+          setSelectedId(items[0].id);
+          setDraft(items[0]);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : "Could not load segments.");
+        }
+      });
+    return () => controller.abort();
+  }, [videoId]);
 
   async function handleTimeUpdate() {
-    if (!videoRef.current) {
-      return;
-    }
-
+    if (!videoRef.current) return;
     const time = videoRef.current.currentTime;
-
     setCurrentTime(time);
-
-    const response = await fetch(
-      `${API_URL}/api/videos/${videoId}/frame?time=${time}`
-    );
-
-    const data = await response.json();
-
-    setCurrentFrame(data.frame);
-  }
-
-  function handleLoadedMetadata() {
-    if (!videoRef.current) {
-      return;
+    try {
+      const response = await fetch(`${API_URL}/api/videos/${videoId}/frame?time=${time}`);
+      if (response.ok) {
+        const data: { frame: number } = await response.json();
+        setCurrentFrame(data.frame);
+      }
+    } catch {
+      // Playback remains usable if frame timing is unavailable.
     }
-
-    setDuration(videoRef.current.duration);
   }
 
   function handleTimelineChange(time: number) {
-    if (!videoRef.current) {
-      return;
-    }
-
+    if (!videoRef.current) return;
     videoRef.current.currentTime = time;
     setCurrentTime(time);
   }
 
   function togglePlayback() {
-    if (!videoRef.current) {
-      return;
-    }
-
+    if (!videoRef.current) return;
     if (videoRef.current.paused) {
-      videoRef.current.play();
+      void videoRef.current.play();
       setIsPlaying(true);
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
+    }
+  }
+
+  function newSegment() {
+    const start = Math.min(currentTime, Math.max(0, duration - 0.1));
+    setSelectedId(null);
+    setDraft({
+      title: "",
+      start_time: Number(start.toFixed(2)),
+      end_time: Number(Math.min(duration, start + 5).toFixed(2)),
+      description: "",
+    });
+    setError("");
+    setMessage("");
+  }
+
+  function selectSegment(segment: Segment) {
+    setSelectedId(segment.id);
+    setDraft(segment);
+    setError("");
+    setMessage("");
+    handleTimelineChange(segment.start_time);
+  }
+
+  async function saveSegment() {
+    const payload = { ...draft, title: draft.title.trim() };
+    if (!payload.title || payload.start_time < 0 ||
+        payload.end_time <= payload.start_time || payload.end_time > duration) {
+      setError("Enter a title and a valid time range within the video.");
+      return;
+    }
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setError("Sign in again to save this segment.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(
+        `${API_URL}/api/videos/${videoId}/segments${selectedId ? `/${selectedId}` : ""}`,
+        {
+          method: selectedId ? "PUT" : "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(typeof body.detail === "string" ? body.detail : `Save failed (${response.status}).`);
+      }
+      const saved: Segment = await response.json();
+      setSegments((previous) => [...previous.filter((item) => item.id !== saved.id), saved]
+        .sort((a, b) => a.start_time - b.start_time));
+      setSelectedId(saved.id);
+      setDraft(saved);
+      setMessage("Segment saved.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save segment.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSelectedSegment() {
+    if (!selectedId || !window.confirm(`Delete segment "${draft.title}"?`)) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setError("Sign in again to delete this segment.");
+      return;
+    }
+    setDeleting(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(
+        `${API_URL}/api/videos/${videoId}/segments/${selectedId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) throw new Error(`Could not delete segment (${response.status}).`);
+      const remaining = segments.filter((item) => item.id !== selectedId);
+      setSegments(remaining);
+      if (remaining.length > 0) {
+        selectSegment(remaining[0]);
+      } else {
+        newSegment();
+      }
+      setMessage("Segment deleted.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not delete segment.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -77,37 +194,35 @@ function VideoViewer({ videoId }: Props) {
             ref={videoRef}
             className="video-player"
             onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
+            onLoadedMetadata={() => setDuration(videoRef.current?.duration || 0)}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
           >
-            <source
-              src={`${API_URL}/api/videos/${videoId}/stream`}
-              type="video/mp4"
-            />
+            <source src={`${API_URL}/api/videos/${videoId}/stream`} type="video/mp4" />
           </video>
-
           <div className="video-controls">
-            <button type="button" onClick={togglePlayback}>
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-
+            <button type="button" onClick={togglePlayback}>{isPlaying ? "Pause" : "Play"}</button>
             <span>{currentTime.toFixed(2)} s</span>
             <span>Frame {currentFrame}</span>
           </div>
         </div>
-
         <aside className="segments-panel">
           <div className="segments-header">
             <h2>Segments</h2>
-
-            <button type="button">
-              + New segment
+            <button type="button" onClick={newSegment} disabled={duration <= 0}>+ New segment</button>
+          </div>
+          {segments.length === 0 && <p>No saved segments yet.</p>}
+          {segments.map((segment) => (
+            <button
+              key={segment.id}
+              type="button"
+              className={`segment-item ${selectedId === segment.id ? "active" : ""}`}
+              onClick={() => selectSegment(segment)}
+            >
+              <strong>{segment.start_time.toFixed(2)} – {segment.end_time.toFixed(2)} s</strong>
+              <span>{segment.title}</span>
             </button>
-          </div>
-
-          <div className="segment-item">
-            <strong>00:00 – 00:12</strong>
-            <span>Introduction</span>
-          </div>
+          ))}
         </aside>
       </div>
 
@@ -116,42 +231,54 @@ function VideoViewer({ videoId }: Props) {
         currentTime={currentTime}
         duration={duration}
         onTimeChange={handleTimelineChange}
+        selection={draft.end_time > draft.start_time
+          ? { start: draft.start_time, end: draft.end_time }
+          : null}
+        onSelectionChange={(start_time, end_time) => {
+          setDraft((current) => ({ ...current, start_time, end_time }));
+          setMessage("");
+        }}
       />
+      <p className="timeline-hint">Drag the blue start bar or orange end bar to set the segment range.</p>
 
       <section className="annotation-details">
-        <h2>Annotation details</h2>
-
-        <div className="annotation-grid">
-          <div className="annotation-left">
-            <label>
-              Segment
-              <select>
-                <option value="1">Introduction</option>
-              </select>
+        <h2>{selectedId ? "Edit segment" : "New segment"}</h2>
+        <div className="annotation-fields">
+          <label>Title
+            <input
+              value={draft.title}
+              maxLength={120}
+              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+              placeholder="What happens in this segment?"
+            />
+          </label>
+          <div className="time-row">
+            <label>Start (seconds)
+              <input type="number" min="0" max={duration} step="0.01" value={draft.start_time}
+                onChange={(event) => setDraft({ ...draft, start_time: Number(event.target.value) })} />
             </label>
-
-            <label>
-              Description
-              <textarea
-                defaultValue="Describe what happens in the segment."
-              />
-            </label>
-          </div>
-
-          <div className="annotation-right">
-            <label>
-              Summary
-              <textarea
-                defaultValue="Summarization of the whole video"
-              />
+            <label>End (seconds)
+              <input type="number" min="0" max={duration} step="0.01" value={draft.end_time}
+                onChange={(event) => setDraft({ ...draft, end_time: Number(event.target.value) })} />
             </label>
           </div>
+          <label>Description
+            <textarea value={draft.description} maxLength={10000}
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+              placeholder="Describe what happens in the segment." />
+          </label>
         </div>
-
-        <div className="annotation-actions">
-          <button type="button">Save segment</button>
-          <button type="button">Mark as complete</button>
-          <button type="button">Next</button>
+        {error && <p role="alert">{error}</p>}
+        {message && <p role="status">{message}</p>}
+        <div className="segment-actions">
+          <button type="button" onClick={saveSegment} disabled={saving || deleting || duration <= 0}>
+            {saving ? "Saving…" : "Save segment"}
+          </button>
+          {selectedId && (
+            <button type="button" onClick={deleteSelectedSegment} disabled={saving || deleting}>
+              {deleting ? "Deleting…" : "Delete segment"}
+            </button>
+          )}
         </div>
       </section>
     </section>

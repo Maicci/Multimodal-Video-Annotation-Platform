@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: video_annotation
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d video_annotation"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - test_db:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: test-space/backend.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://test_user:test_password@db:5432/video_annotation
+      TEST_DATABASE_URL: postgresql://test_user:test_password@db:5432/video_annotation
+      JWT_SECRET_KEY: local-test-only-secret-key-change-before-deployment
+      INITIAL_ADMIN_EMAIL: admin@example.com
+      INITIAL_ADMIN_PASSWORD: test-password-123
+      VIDEO_STORAGE_PATH: /workspace/storage/videos/original
+    volumes:
+      - ../backend:/workspace/backend
+      - test_videos:/workspace/storage/videos
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--app-dir", "/workspace/backend", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: test-space/frontend.Dockerfile
+    environment:
+      VITE_API_URL: http://127.0.0.1:8000
+    volumes:
+      - ../frontend:/workspace/frontend
+      - frontend_modules:/workspace/frontend/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - backend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+volumes:
+  test_db:
+  test_videos:
+  frontend_modules:

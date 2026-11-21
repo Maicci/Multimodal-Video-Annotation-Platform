@@ -43,7 +43,42 @@
   transform: translateX(-50%);
 
   pointer-events: none;
+  z-index: 2;
 }
+
+.timeline-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(50, 130, 255, 0.28);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.selection-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 14px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 2px solid #fff;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.selection-handle:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.start-handle { background: #1665d8; }
+.end-handle { background: #c45b00; }
 
 .thumbnail-strip img {
   pointer-events: none;
