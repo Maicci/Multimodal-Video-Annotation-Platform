@@ -45,12 +45,18 @@ thumbnail timeline to set its start and end. The time inputs stay in sync.
 
 After rebuilding the backend image, run the segment API test with
 `docker compose -f test-space/compose.yaml exec backend python -m pytest backend/tests/api/test_segments_api.py`.
-Run the frontend type check and production build with
+Run the frontend type check with
+`docker compose -f test-space/compose.yaml exec frontend npx tsc --noEmit`,
+then the production build with
 `docker compose -f test-space/compose.yaml exec frontend npm run build`.
 
 To run the full browser workflow in a fresh Playwright container, use
 `docker compose -f test-space/compose.yaml --profile e2e up --build --abort-on-container-exit --exit-code-from e2e e2e`.
-It generates a small test video, uploads it, checks playback and thumbnails,
-then creates, edits, reloads, and deletes a segment. The command stops the
-Compose services when the test finishes; restart the app with
+The browser tests check file type rejection, upload progress and disabled
+controls while sending, successful upload and processing, duplicate filename
+errors, playback, thumbnails, and segment changes. The backend tests also
+cover authentication, MP4/MOV uploads, oversized files, storage failures,
+and metadata failures. Run them with
+`docker compose -f test-space/compose.yaml exec backend python -m pytest backend/tests -q`.
+The browser command stops the Compose services when it finishes; restart the app with
 `docker compose -f test-space/compose.yaml up -d` if you want to keep testing.

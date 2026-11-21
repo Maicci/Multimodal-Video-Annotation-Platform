@@ -28,17 +28,35 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page }
     await page.locator('input[type="file"]').setInputFiles({
       name: filename, mimeType: 'video/mp4', buffer: readFileSync(localVideo),
     });
+    await page.route('**/api/videos/upload', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
+    }, { times: 1 });
     const uploadResponse = page.waitForResponse(
       (response) => response.url().endsWith('/api/videos/upload') && response.request().method() === 'POST',
     );
     await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    await expect(page.getByRole('progressbar', { name: 'Video upload progress' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Uploading...' })).toBeDisabled();
     const uploaded = await uploadResponse;
     expect(uploaded.status()).toBe(201);
     videoId = (await uploaded.json()).id as string;
+    await expect(page.getByRole('status')).toContainText(`Video "${filename}" uploaded successfully.`);
 
     const row = page.getByRole('row').filter({ hasText: filename });
     await expect(row).toBeVisible();
     await expect(row.locator('.video-status')).toHaveText('COMPLETED', { timeout: 120_000 });
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: filename, mimeType: 'video/mp4', buffer: readFileSync(localVideo),
+    });
+    const duplicateResponse = page.waitForResponse(
+      (response) => response.url().endsWith('/api/videos/upload') && response.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+    expect((await duplicateResponse).status()).toBe(409);
+    await expect(page.getByRole('alert')).toHaveText('Video with same filename already exists');
+
     await row.getByRole('button', { name: 'View' }).click();
 
     await expect(page.locator('video')).toBeVisible();
@@ -104,4 +122,18 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page }
     }
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('rejects an unsupported file before upload', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Email').fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
+  await page.getByLabel('Password').fill(process.env.TEST_ADMIN_PASSWORD || 'test-password-123');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Admin Page' })).toBeVisible();
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'document.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not a video'),
+  });
+  await expect(page.getByRole('alert')).toHaveText('Only MP4 and MOV files are supported.');
+  await expect(page.getByRole('button', { name: 'Upload', exact: true })).toBeDisabled();
 });
