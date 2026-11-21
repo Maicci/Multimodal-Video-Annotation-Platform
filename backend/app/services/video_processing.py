@@ -11,6 +11,7 @@ import subprocess
 import psycopg
 from app.db.database import Database
 from app.repositories.video_repository import (
+    complete_video_processing,
     fail_video_processing,
     save_timeline_info,
     start_video_processing,
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 def generate_thumbnails(
     video_path: str | Path,
     output_dir: str | Path,
-    thumbnail_count: int = 100,
+    thumbnail_count: int = 12,
 ) -> None:
     video_path = Path(video_path)
     output_dir = Path(output_dir)
@@ -44,6 +45,8 @@ def generate_thumbnails(
     data = json.loads(result.stdout)
     duration = float(data["format"]["duration"])
 
+    if duration <= 0:
+        raise ValueError("Video duration must be positive")
     fps_value = thumbnail_count / duration
 
     subprocess.run(
@@ -95,9 +98,11 @@ def process_video(video_id: str, database_url: str, video_path: str | Path, time
             )
 
         generate_thumbnails(video_path, thumbnails_dir)
+        with closing(Database(database_url).connect()) as connection:
+            complete_video_processing(connection, video_id)
     except Exception:
         logger.exception("Processing failed for video %s", video_id)
         _mark_failed(database_url, video_id)
         return
 
-    logger.info("Video %s is ready for asynchronous processing", video_id)
+    logger.info("Video %s processing completed", video_id)

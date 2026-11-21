@@ -2,6 +2,9 @@
 
 This repository contains the starter skeleton for a browser-driven multimodal video annotation system. The `backend` and `frontend` directories are reserved for application development; the runnable example lives in `examples/`.
 
+To try the current frontend and backend together, use the Docker setup in
+[`test-space/README.md`](test-space/README.md).
+
 ## Example application
 
 The example is a FastAPI prototype with health, video, segment, and summary endpoints and a minimal browser interface.

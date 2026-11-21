@@ -25,11 +25,8 @@ function FrameTimeline({
 
   if (duration > 0) {
     for (let i = 0; i < thumbnailAmount; i++) {
-      const time = (i / thumbnailAmount) * duration;
-
       thumbnails.push({
-        number: Math.floor(time) + 1,
-        time: time,
+        number: i + 1,
       });
     }
   }
@@ -94,6 +91,7 @@ function FrameTimeline({
       <div className="thumbnail-strip">
         {thumbnails.map((thumbnail) => (
           <img
+            key={thumbnail.number}
             src={`${API_URL}/api/videos/${videoId}/thumbnails/${thumbnail.number}`}
             alt=""
             draggable={false}

@@ -7,7 +7,7 @@ import VideoList, { type VideoItem } from "../features/videos/VideoList";
 
 const API_URL = "http://127.0.0.1:8000";
 
-function AdminPage() {
+function AdminPage({ onView, onSignOut }: { onView: (id: string) => void; onSignOut: () => void }) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [listError, setListError] = useState("");
 
@@ -34,6 +34,8 @@ function AdminPage() {
 
   useEffect(() => {
     loadVideos();
+    const interval = window.setInterval(loadVideos, 3000);
+    return () => window.clearInterval(interval);
   }, [loadVideos]);
 
   const deleteVideo = useCallback(
@@ -73,11 +75,12 @@ function AdminPage() {
   return (
     <main>
       <h1>Admin Page</h1>
+      <button type="button" onClick={onSignOut}>Sign out</button>
 
       <VideoUpload onUploaded={loadVideos} />
 
       {listError && <p>{listError}</p>}
-      <VideoList videos={videos} onDelete={deleteVideo} />
+      <VideoList videos={videos} onDelete={deleteVideo} onView={onView} />
     </main>
   );
 }

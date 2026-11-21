@@ -57,7 +57,13 @@ class Database:
                     codec TEXT,
                     processing_status TEXT NOT NULL,
                     metadata_extracted BOOLEAN NOT NULL DEFAULT FALSE,
+                    timeline_path TEXT,
+                    frame_count INTEGER,
+                    is_vfr BOOLEAN,
                     updated_at TIMESTAMPTZ NOT NULL
                 )
                 """
             )
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS timeline_path TEXT")
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS frame_count INTEGER")
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_vfr BOOLEAN")

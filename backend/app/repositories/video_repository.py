@@ -176,3 +176,15 @@ def fail_video_processing(connection: psycopg.Connection, video_id: str) -> None
             """,
             (datetime.now(timezone.utc), video_id),
         )
+
+
+def complete_video_processing(connection: psycopg.Connection, video_id: str) -> None:
+    with connection:
+        connection.execute(
+            """
+            UPDATE videos
+            SET processing_status = 'COMPLETED', updated_at = %s
+            WHERE id = %s AND processing_status = 'PROCESSING'
+            """,
+            (datetime.now(timezone.utc), video_id),
+        )
