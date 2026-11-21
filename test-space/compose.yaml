@@ -19,6 +19,7 @@ services:
       dockerfile: test-space/backend.Dockerfile
     environment:
       DATABASE_URL: postgresql://test_user:test_password@db:5432/video_annotation
+      TEST_DATABASE_URL: postgresql://test_user:test_password@db:5432/video_annotation
       JWT_SECRET_KEY: local-test-only-secret-key-change-before-deployment
       INITIAL_ADMIN_EMAIL: admin@example.com
       INITIAL_ADMIN_PASSWORD: test-password-123

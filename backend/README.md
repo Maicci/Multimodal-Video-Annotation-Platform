@@ -38,10 +38,13 @@ in the `Authorization` header.
 - Authenticated `POST /api/videos/upload` for MP4 and MOV uploads. Source bytes
   are stored unchanged under `storage/videos/original` by default; duplicate
   filenames return `409` and are never overwritten.
-- Administrator-only video creation and assignment; users can list only
-  videos assigned to them
-- Annotation creation/editing by annotators, review decisions/comments by
-  reviewers, and administrator-wide annotation access
+- Authenticated video listing, administrator-only deletion, and video playback
+- Saved segment creation/editing for annotators and administrators
+
+The current segment API is `GET`/`POST /api/videos/{video_id}/segments` and
+`PUT /api/videos/{video_id}/segments/{segment_id}`. Segments contain a title,
+start and end times in seconds, and a description. Each signed-in user sees
+their own segments. Annotators and administrators can create and edit them.
 
 Video uploads are limited to 500 MiB by default. Set `MAX_VIDEO_SIZE_MB` to
 change the limit and `VIDEO_STORAGE_PATH` to change the source-video directory.

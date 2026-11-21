@@ -6,6 +6,7 @@ from app.services.frame_timing import FrameTimeline
 import logging
 from contextlib import closing
 import json
+import shutil
 import subprocess
 
 import psycopg
@@ -58,10 +59,20 @@ def generate_thumbnails(
             f"fps={fps_value},scale=240:-1",
             "-q:v",
             "6",
+            "-frames:v",
+            str(thumbnail_count),
             str(output_dir / "%d.jpg"),
         ],
         check=True,
     )
+
+    generated = sorted(output_dir.glob("*.jpg"), key=lambda path: int(path.stem))
+    if not generated:
+        raise ValueError("No thumbnails were generated")
+    for number in range(1, thumbnail_count + 1):
+        target = output_dir / f"{number}.jpg"
+        if not target.exists():
+            shutil.copyfile(generated[-1], target)
 
 
 def _mark_failed(database_url: str, video_id: str) -> None:
