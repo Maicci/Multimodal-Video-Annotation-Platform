@@ -23,14 +23,20 @@ function AdminPage({ onView, onSignOut }: { onView: (id: string) => void; onSign
       const res = await fetch(`${API_URL}/api/videos`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      setVideos(await res.json());
+      if (res.status === 401) {
+        onSignOut();
+        return;
+      }
+      if (!res.ok) throw new Error(`Video list request failed (${res.status})`);
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Video list response was not an array");
+      setVideos(data as VideoItem[]);
       setListError("");
     } catch (err) {
       console.error("Video list request failed:", err);
-      setListError("Could not reach the server.");
+      setListError(err instanceof Error ? err.message : "Could not load the video list.");
     }
-  }, []);
+  }, [onSignOut]);
 
   useEffect(() => {
     loadVideos();
