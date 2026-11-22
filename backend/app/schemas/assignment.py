@@ -1,0 +1,19 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel
+
+AnnotationStatus = Literal["not_started", "in_progress", "completed"]
+
+
+class AssignmentOut(BaseModel):
+    video_id: UUID
+    title: str
+    original_filename: str
+    duration_seconds: float | None
+    protocol_group: Literal["shared", "individual"]
+    status: AnnotationStatus
+    segment_count: int
+    assigned_at: datetime
+    updated_at: datetime

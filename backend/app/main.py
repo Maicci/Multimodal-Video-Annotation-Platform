@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.api.videoplayer import router as videos_router
+from backend.app.api.routes import assignments
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.database import Database
@@ -85,6 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = application_settings
 
     application.include_router(api_router)
+    application.include_router(assignments.router)
     application.include_router(
         videos_router,
         prefix="/api",

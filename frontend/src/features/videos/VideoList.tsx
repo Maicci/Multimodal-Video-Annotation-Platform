@@ -49,7 +49,7 @@ function VideoList({ videos, onDelete, onView }: Props) {
                 <td>{new Date(v.uploaded_at).toLocaleString()}</td>
                 <td>—</td>
                 <td>
-                  <button type="button" className="view-button" onClick={() => onView(v.id)} disabled={v.status !== "COMPLETED"}>
+                  <button type="button" className="view-button" onClick={() => onView(v.id)}>
                     View
                   </button>{" "}
                   <button

@@ -82,3 +82,23 @@ class Database:
                 )
                 """
             )
+
+            connection.execute(
+                "ALTER TABLE videos ADD COLUMN IF NOT EXISTS protocol_group TEXT "
+                "NOT NULL DEFAULT 'individual' CHECK (protocol_group IN ('shared', 'individual'))"
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS video_assignments (
+                    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    video_id     UUID NOT NULL REFERENCES videos (id) ON DELETE CASCADE,
+                    user_id      UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    status       TEXT NOT NULL DEFAULT 'not_started'
+                                CHECK (status IN ('not_started', 'in_progress', 'completed')),
+                    assigned_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMPTZ,
+                    UNIQUE (video_id, user_id)
+                )
+                """
+            )
