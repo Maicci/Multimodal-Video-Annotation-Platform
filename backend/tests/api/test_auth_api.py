@@ -77,6 +77,17 @@ def test_login_me_and_user_management_access(client: TestClient) -> None:
     assert "password_hash" not in current_user.json()
 
     annotator = create_user(client, token, "annotator@example.com", "annotator")
+    duplicate_user = client.post(
+        "/api/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "email": "annotator@example.com",
+            "full_name": "Another Annotator",
+            "password": "secure-test-password-123",
+            "role": "annotator",
+        },
+    )
+    assert duplicate_user.status_code == 409, duplicate_user.text
     annotator_token = login(client, "annotator@example.com", "secure-test-password-123")
     assert client.get(
         "/api/users",
@@ -103,6 +114,16 @@ def test_registration_persists_until_approval_or_rejection(client: TestClient) -
     assert registered.status_code == 201, registered.text
     assert registered.json()["status"] == "pending"
     assert registered.json()["role"] is None
+
+    duplicate = client.post(
+        "/api/auth/register",
+        json={
+            "email": "new-annotator@example.com",
+            "full_name": "New Annotator",
+            "password": password,
+        },
+    )
+    assert duplicate.status_code == 409, duplicate.text
 
     pending_login = client.post(
         "/api/auth/login",
