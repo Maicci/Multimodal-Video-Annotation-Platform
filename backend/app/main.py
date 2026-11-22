@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.api.videoplayer import router as videos_router
-from backend.app.api.routes import assignments
+from app.api.routes import assignments
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.database import Database
