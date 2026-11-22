@@ -23,7 +23,7 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
     await page.getByLabel('Email').fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
     await page.getByLabel('Password').fill(process.env.TEST_ADMIN_PASSWORD || 'test-password-123');
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('heading', { name: 'Admin Page' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Videos', exact: true })).toBeVisible();
     token = await page.evaluate(() => localStorage.getItem('access_token'));
 
     await page.locator('input[type="file"]').setInputFiles({
@@ -96,7 +96,7 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
     await page.getByRole('button', { name: 'Save segment' }).click();
     await expect(page.getByRole('status')).toHaveText('Segment saved.');
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Admin Page' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Videos', exact: true })).toBeVisible();
     await page.getByRole('row').filter({ hasText: filename }).getByRole('button', { name: 'View' }).click();
     await expect(page.getByLabel('Title')).toHaveValue('Opening scene');
     await expect(page.getByLabel('Description')).toHaveValue('A test pattern appears.');
@@ -138,7 +138,7 @@ test('rejects an unsupported file before upload', async ({ page }) => {
   await page.getByLabel('Email').fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
   await page.getByLabel('Password').fill(process.env.TEST_ADMIN_PASSWORD || 'test-password-123');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'Admin Page' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Videos', exact: true })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles({
     name: 'document.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not a video'),

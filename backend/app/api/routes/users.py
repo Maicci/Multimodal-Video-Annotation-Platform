@@ -144,13 +144,11 @@ def create_user(payload: UserCreate, connection: Connection) -> UserResponse:
             role=payload.role.value,
             password_hash=hash_password(payload.password),
         )
-    except psycopg.IntegrityError as error:
-        if error.diag.constraint_name == "users_email_unique":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A user with this email already exists",
-            ) from error
-        raise
+    except psycopg.errors.UniqueViolation as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        ) from error
 
     return _user_response(user)
 

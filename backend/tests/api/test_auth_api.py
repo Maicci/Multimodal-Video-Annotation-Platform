@@ -77,6 +77,17 @@ def test_login_me_and_user_management_access(client: TestClient) -> None:
     assert "password_hash" not in current_user.json()
 
     annotator = create_user(client, token, "annotator@example.com", "annotator")
+    duplicate_user = client.post(
+        "/api/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "email": "annotator@example.com",
+            "full_name": "Another Annotator",
+            "password": "secure-test-password-123",
+            "role": "annotator",
+        },
+    )
+    assert duplicate_user.status_code == 409, duplicate_user.text
     annotator_token = login(client, "annotator@example.com", "secure-test-password-123")
     assert client.get(
         "/api/users",
@@ -88,4 +99,73 @@ def test_login_me_and_user_management_access(client: TestClient) -> None:
         "/api/auth/login",
         json={"email": ADMIN_EMAIL, "password": "wrong-password"},
     ).status_code == 401
+
+
+def test_registration_persists_until_approval_or_rejection(client: TestClient) -> None:
+    password = "registered-user-password-123"
+    registered = client.post(
+        "/api/auth/register",
+        json={
+            "email": "new-annotator@example.com",
+            "full_name": "New Annotator",
+            "password": password,
+        },
+    )
+    assert registered.status_code == 201, registered.text
+    assert registered.json()["status"] == "pending"
+    assert registered.json()["role"] is None
+
+    duplicate = client.post(
+        "/api/auth/register",
+        json={
+            "email": "new-annotator@example.com",
+            "full_name": "New Annotator",
+            "password": password,
+        },
+    )
+    assert duplicate.status_code == 409, duplicate.text
+
+    pending_login = client.post(
+        "/api/auth/login",
+        json={"email": "new-annotator@example.com", "password": password},
+    )
+    assert pending_login.status_code == 403
+
+    admin_token = login(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    pending = client.get("/api/users/pending", headers=headers)
+    assert pending.status_code == 200
+    assert any(user["id"] == registered.json()["id"] for user in pending.json())
+
+    approved = client.patch(
+        f"/api/users/{registered.json()['id']}/approve",
+        headers=headers,
+        json={"role": "annotator"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "active"
+    annotator_token = login(client, "new-annotator@example.com", password)
+    current_user = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {annotator_token}"},
+    )
+    assert current_user.json()["role"] == "annotator"
+
+    rejected = client.post(
+        "/api/auth/register",
+        json={
+            "email": "rejected@example.com",
+            "full_name": "Rejected User",
+            "password": password,
+        },
+    )
+    assert rejected.status_code == 201
+    decision = client.patch(f"/api/users/{rejected.json()['id']}/reject", headers=headers)
+    assert decision.status_code == 200, decision.text
+    assert decision.json()["status"] == "rejected"
+    rejected_login = client.post(
+        "/api/auth/login",
+        json={"email": "rejected@example.com", "password": password},
+    )
+    assert rejected_login.status_code == 403
     
