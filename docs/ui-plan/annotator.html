@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Annotator view — UI proposal</title>
   <link rel="stylesheet" href="mockups.css">
+  <link rel="stylesheet" href="spec-adjustments.css">
 </head>
 <body>
   <div class="shell annotator-shell">
@@ -18,33 +19,36 @@
       <div class="sidebar-bottom"><span class="avatar annotator-avatar">AN</span><span>Annotator<small>annotator@example.com</small></span><span class="dots">•••</span></div>
     </aside>
     <main class="main">
-      <header class="topbar"><span>My annotations <span class="crumb">/</span> training_demo.mp4</span><span class="topbar-right"><span class="live-dot"></span> All changes saved <span class="divider"></span> Help</span></header>
+      <header class="topbar"><span>My annotations <span class="crumb">/</span> training_demo.mp4</span><span class="topbar-right"><span class="live-dot"></span> Draft saved <span class="divider"></span> Instructions <span class="divider"></span> Help</span></header>
       <div class="content annotator-content">
-        <div class="annotator-title"><div><div class="eyebrow">ANNOTATION WORKSPACE</div><h1>training_demo.mp4</h1><p>02:18 duration · 25 fps · Uploaded 21 Nov 2026</p></div><div class="outline-button">← Back to videos</div></div>
+        <div class="annotator-title"><div><div class="eyebrow">SHARED ANNOTATION SET · IN PROGRESS</div><h1>training_demo.mp4</h1><p>02:18 duration · Variable frame rate · Your work is private until review</p></div><div class="outline-button">← Back to videos</div></div>
         <div class="workspace-grid">
           <section class="card video-card">
             <div class="video-preview"><div class="preview-light"></div><div class="preview-shape shape-one"></div><div class="preview-shape shape-two"></div><div class="preview-caption">VIDEO PREVIEW</div><div class="play-circle">▶</div><div class="preview-time">00:42 / 02:18</div></div>
-            <div class="player-controls"><span class="play-control">▶</span><span class="control-time">00:42.18</span><span class="frame-label">Frame 1055</span><span class="control-spacer"></span><span>◖))</span><span>⛶</span></div>
+            <div class="player-controls"><span class="play-control">▶</span><span class="control-time">00:42.18</span><span class="frame-label">Frame 1046</span><span class="control-spacer"></span><span>◖))</span><span>⛶</span></div>
           </section>
           <section class="card segments-card">
-            <div class="panel-head"><div><div class="card-heading">Segments <span class="count">6</span></div><p>Choose a segment to edit its details.</p></div><span class="small-primary">＋ New</span></div>
+            <div class="panel-head"><div><div class="card-heading">Your segments <span class="count">6</span></div><p>Choose a segment to edit its details.</p></div><span class="small-primary">＋ New</span></div>
             <div class="segment-row"><span class="segment-line blue"></span><div><strong>00:00 – 00:18</strong><small>Introduction</small></div><span>›</span></div>
             <div class="segment-row active"><span class="segment-line purple"></span><div><strong>00:38 – 00:57</strong><small>Demonstration begins</small></div><span>›</span></div>
             <div class="segment-row"><span class="segment-line teal"></span><div><strong>01:05 – 01:26</strong><small>Participant response</small></div><span>›</span></div>
             <div class="segment-row"><span class="segment-line amber"></span><div><strong>01:32 – 01:48</strong><small>Closing remarks</small></div><span>›</span></div>
           </section>
           <section class="card timeline-card">
-            <div class="timeline-top"><div class="card-heading">Timeline <span class="timeline-hint">Drag the handles to set start and end</span></div><span>− &nbsp; ━━━━━●━━ &nbsp; ＋</span></div>
+            <div class="timeline-top"><div class="card-heading">Shared video &amp; audio timeline</div><span>− &nbsp; ━━━━━●━━ &nbsp; ＋</span></div>
             <div class="ruler"><span>00:00</span><span>00:30</span><span>01:00</span><span>01:30</span><span>02:00</span><span>02:18</span></div>
             <div class="thumb-strip"><div class="thumb a"></div><div class="thumb b"></div><div class="thumb c"></div><div class="thumb d"></div><div class="thumb e"></div><div class="thumb f"></div><div class="thumb g"></div><div class="thumb h"></div><div class="thumb i"></div><div class="thumb j"></div><div class="thumb k"></div><div class="thumb l"></div><div class="selection-band"><span class="handle start"></span><span class="handle end"></span></div><div class="playhead"></div></div>
-            <div class="range-values"><span><i class="blue-dot"></i> Start 00:38.00</span><span><i class="amber-dot"></i> End 00:57.00</span><span class="range-duration">Duration 19.00 s</span></div>
+            <div class="waveform-label">AUDIO WAVEFORM <span>Aligned with the video frames above</span></div>
+            <div class="waveform"><div class="waveform-wave"></div><div class="waveform-selection"></div><div class="waveform-playhead"></div></div>
+            <div class="range-values"><span><i class="blue-dot"></i> Start 00:38.00 · Frame 947</span><span><i class="amber-dot"></i> End 00:57.00 · Frame 1418</span></div>
           </section>
           <section class="card details-card">
-            <div class="panel-head"><div><div class="card-heading">Segment details</div><p>Demonstration begins</p></div><span class="saved-tag">● Saved</span></div>
-            <div class="field-label">TITLE</div><div class="field">Demonstration begins</div>
-            <div class="time-fields"><div><div class="field-label">START</div><div class="field">00:38.00</div></div><div><div class="field-label">END</div><div class="field">00:57.00</div></div></div>
-            <div class="field-label">DESCRIPTION</div><div class="field description">The instructor demonstrates the movement. The participant follows and asks a question.</div>
-            <div class="detail-actions"><span class="danger-link">Delete segment</span><span class="primary-button">Save segment</span></div>
+            <div class="panel-head"><div><div class="card-heading">Segment annotation</div><p>Demonstration begins</p></div><span class="saved-tag">● Draft saved</span></div>
+            <div class="time-fields"><div><div class="field-label">START · TIME / FRAME</div><div class="field">00:38.00 / 947</div></div><div><div class="field-label">END · TIME / FRAME</div><div class="field">00:57.00 / 1418</div></div></div>
+            <div class="field-label">VIDEO DESCRIPTION</div><div class="field description">The instructor demonstrates a movement.</div>
+            <div class="field-label">AUDIO DESCRIPTION</div><div class="field description">The instructor explains the steps aloud.</div>
+            <div class="field-label">WHOLE-VIDEO SUMMARY</div><div class="field summary">A short summary after reviewing the entire video.</div>
+            <div class="detail-actions"><span class="danger-link">Skip video</span><span class="action-group"><span class="outline-button">Save draft</span><span class="primary-button">Mark complete</span></span></div>
           </section>
         </div>
         <div class="proposal-note">UI PROPOSAL <span>Illustrative content · not live application data</span></div>

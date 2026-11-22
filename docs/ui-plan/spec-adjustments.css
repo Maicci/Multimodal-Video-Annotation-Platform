@@ -1,0 +1,15 @@
+.title-actions, .action-group { display: flex; align-items: center; gap: 9px; }
+.waveform-label { display: flex; justify-content: space-between; margin-top: 9px; color: #9fb2c9; font-size: 9px; font-weight: 800; letter-spacing: .8px; }
+.waveform-label span { color: #8499b1; font-weight: 400; letter-spacing: 0; }
+.waveform { position: relative; height: 40px; margin-top: 4px; overflow: hidden; border: 1px solid #3e5269; border-radius: 6px; background: #101d2b; }
+.waveform-wave { position: absolute; inset: 3px 0; background: repeating-linear-gradient(90deg, #67c5cf 0 2px, transparent 2px 5px); clip-path: polygon(0 40%, 5% 20%, 10% 42%, 15% 5%, 20% 35%, 25% 15%, 30% 40%, 35% 12%, 40% 30%, 45% 4%, 50% 36%, 55% 21%, 60% 42%, 65% 8%, 70% 30%, 75% 20%, 80% 47%, 85% 10%, 90% 30%, 95% 18%, 100% 40%, 100% 60%, 95% 82%, 90% 70%, 85% 90%, 80% 53%, 75% 80%, 70% 70%, 65% 92%, 60% 58%, 55% 79%, 50% 64%, 45% 96%, 40% 70%, 35% 88%, 30% 60%, 25% 85%, 20% 65%, 15% 95%, 10% 58%, 5% 80%, 0 60%); }
+.waveform-selection { position: absolute; left: 27.5%; width: 14%; top: 0; bottom: 0; border-left: 2px solid #76a8ff; border-right: 2px solid #ffba72; background: #778cff38; }
+.waveform-playhead { position: absolute; left: 31%; top: 0; bottom: 0; width: 2px; background: #f4f7fc; }
+.timeline-card .range-values { margin-top: 9px; }
+.details-card .panel-head { margin-bottom: 7px; }
+.details-card .field-label { margin: 6px 0 4px; }
+.details-card .field { min-height: 27px; padding: 5px 9px; }
+.details-card .description { height: 39px; }
+.details-card .summary { height: 33px; }
+.details-card .detail-actions { margin-top: 8px; }
+.details-card .outline-button, .details-card .primary-button { padding: 6px 9px; font-size: 10px; }
