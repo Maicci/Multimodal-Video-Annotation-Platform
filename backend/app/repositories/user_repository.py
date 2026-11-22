@@ -104,7 +104,7 @@ def create_user(
     password_hash: str,
 ) -> dict[str, Any]:
     with connection.transaction():
-        return connection.execute(
+        user = connection.execute(
             """
             INSERT INTO users (
                 id,
@@ -124,6 +124,8 @@ def create_user(
                 password_hash,
             ),
         ).fetchone()
+    connection.commit()
+    return user
 
 
 def create_pending_user(
@@ -134,7 +136,7 @@ def create_pending_user(
     password_hash: str,
 ) -> dict[str, Any]:
     with connection.transaction():
-        return connection.execute(
+        user = connection.execute(
             """
             INSERT INTO users (
                 id,
@@ -154,6 +156,8 @@ def create_pending_user(
                 password_hash,
             ),
         ).fetchone()
+    connection.commit()
+    return user
 
 
 def list_pending_users(
@@ -232,4 +236,3 @@ def delete_user(
         (user_id,),
     )
     connection.commit()
-        
