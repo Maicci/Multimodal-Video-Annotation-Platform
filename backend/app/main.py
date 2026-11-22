@@ -86,7 +86,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = application_settings
 
     application.include_router(api_router)
-    application.include_router(assignments.router)
     application.include_router(
         videos_router,
         prefix="/api",

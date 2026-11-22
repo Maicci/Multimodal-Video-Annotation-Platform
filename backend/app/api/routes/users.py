@@ -11,15 +11,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.dependencies import Connection, require_roles
 from app.core.security import hash_password
 from app.repositories.user_repository import (
+    approve_user,
     count_users_with_role,
     create_user as create_user_record,
     delete_user as delete_user_record,
     find_user_by_id,
-    find_user_role_by_id,
+    list_pending_users,
     list_users as list_user_records,
+    reject_user,
     update_user_role,
 )
-from app.schemas.user import Role, RoleUpdate, UserCreate, UserResponse
+
+
+from app.schemas.user import (
+    Role,
+    RoleUpdate,
+    UserApprovalRequest,
+    UserCreate,
+    UserResponse,
+)
 
 router = APIRouter(
     prefix="/api/users",
@@ -34,8 +44,94 @@ def _user_response(user: dict[str, Any]) -> UserResponse:
         email=user["email"],
         full_name=user["full_name"],
         role=user["role"],
+        status=user["status"],
         created_at=user["created_at"],
     )
+    
+@router.get("/pending", response_model=list[UserResponse])
+def get_pending_users(connection: Connection) -> list[UserResponse]:
+    users = list_pending_users(connection)
+    return [_user_response(user) for user in users]
+
+@router.patch("/{user_id}/approve", response_model=UserResponse)
+def approve_pending_user(
+    user_id: UUID,
+    payload: UserApprovalRequest,
+    connection: Connection,
+    actor: Annotated[
+        dict[str, Any],
+        Depends(require_roles(Role.ADMINISTRATOR)),
+    ],
+) -> UserResponse:
+    user = find_user_by_id(connection, str(user_id))
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user["status"] != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not pending approval",
+        )
+
+    approve_user(
+        connection,
+        str(user_id),
+        payload.role.value,
+        actor["id"],
+    )
+
+    updated_user = find_user_by_id(connection, str(user_id))
+
+    if updated_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return _user_response(updated_user)
+
+@router.patch("/{user_id}/reject", response_model=UserResponse)
+def reject_pending_user(
+    user_id: UUID,
+    connection: Connection,
+    actor: Annotated[
+        dict[str, Any],
+        Depends(require_roles(Role.ADMINISTRATOR)),
+    ],
+) -> UserResponse:
+    user = find_user_by_id(connection, str(user_id))
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user["status"] != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User is not pending approval",
+        )
+
+    reject_user(
+        connection,
+        str(user_id),
+        actor["id"],
+    )
+
+    updated_user = find_user_by_id(connection, str(user_id))
+
+    if updated_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return _user_response(updated_user)
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -92,23 +188,37 @@ def change_user_role(
 def delete_user(
     user_id: UUID,
     connection: Connection,
-    actor: Annotated[dict[str, Any], Depends(require_roles(Role.ADMINISTRATOR))],
+    actor: Annotated[
+        dict[str, Any],
+        Depends(require_roles(Role.ADMINISTRATOR)),
+    ],
 ) -> None:
     if actor["id"] == str(user_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Administrators cannot delete their own account",
         )
-    role = find_user_role_by_id(connection, str(user_id))
-    if role is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if role == Role.ADMINISTRATOR.value:
-        admin_count = count_users_with_role(connection, Role.ADMINISTRATOR.value)
+
+    user = find_user_by_id(connection, str(user_id))
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user["role"] == Role.ADMINISTRATOR.value:
+        admin_count = count_users_with_role(
+            connection,
+            Role.ADMINISTRATOR.value,
+        )
+
         if admin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete the last administrator",
             )
+
     try:
         delete_user_record(connection, str(user_id))
     except psycopg.IntegrityError as error:

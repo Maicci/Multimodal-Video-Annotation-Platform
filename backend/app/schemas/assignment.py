@@ -17,3 +17,8 @@ class AssignmentOut(BaseModel):
     segment_count: int
     assigned_at: datetime
     updated_at: datetime
+
+
+class AssignmentCreate(BaseModel):
+    video_id: UUID
+    annotator_email: str

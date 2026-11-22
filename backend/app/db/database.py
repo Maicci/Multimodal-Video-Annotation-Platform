@@ -27,17 +27,53 @@ class Database:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (
-                    id UUID PRIMARY KEY,
-                    email VARCHAR(254) NOT NULL UNIQUE,
-                    full_name VARCHAR(120) NOT NULL,
-                    role TEXT NOT NULL CHECK (
-                        role IN ('annotator', 'reviewer', 'administrator')
-                    ),
-                    password_hash TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                id UUID PRIMARY KEY,
+                email VARCHAR(254) NOT NULL UNIQUE,
+                full_name VARCHAR(120) NOT NULL,
+                role TEXT CHECK (
+                role IN ('annotator', 'reviewer', 'administrator')
+                ),
+                status TEXT NOT NULL DEFAULT 'active' CHECK (
+                status IN ('pending', 'active', 'rejected')
+                ),
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                approved_by UUID REFERENCES users (id),
+                approved_at TIMESTAMPTZ
                 )
                 """
             )
+            
+            connection.execute(
+                """
+                ALTER TABLE users
+                ALTER COLUMN role DROP NOT NULL
+                """
+                )
+            
+            connection.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS status TEXT
+                NOT NULL DEFAULT 'active'
+                CHECK (status IN ('pending', 'active', 'rejected'))
+                """
+                )
+            
+            connection.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES users (id)
+                """
+                )
+            
+            connection.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ
+                """
+                )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS videos (

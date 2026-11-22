@@ -29,6 +29,18 @@ SELECT v.id            AS video_id,
  ORDER BY (a.status = 'completed'), v.protocol_group, v.title
 """
 
+CREATE_ASSIGNMENT = """
+INSERT INTO video_assignments (
+    video_id,
+    user_id
+)
+VALUES (
+    %(video_id)s,
+    %(user_id)s
+)
+RETURNING video_id, user_id, status, assigned_at, updated_at
+"""
+
 
 class AssignmentRepository:
     def __init__(self, database: Database) -> None:
@@ -37,3 +49,18 @@ class AssignmentRepository:
     def list_for_user(self, user_id: UUID) -> list[dict[str, Any]]:
         with self.database.connect() as connection:
             return connection.execute(LIST_FOR_USER, {"user_id": user_id}).fetchall()
+        
+        
+    def create(
+        self,
+        video_id: UUID,
+        user_id: UUID,
+    ) -> dict[str, Any]:
+        with self.database.connect() as connection:
+            return connection.execute(
+                CREATE_ASSIGNMENT,
+                {
+                    "video_id": video_id,
+                    "user_id": user_id,
+                },
+            ).fetchone()

@@ -15,6 +15,34 @@ class Role(str, Enum):
     REVIEWER = "reviewer"
     ADMINISTRATOR = "administrator"
 
+class UserStatus(str, Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    full_name: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=12, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("Enter a valid email address")
+        return normalized
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return value.strip()
+
+
+class UserApprovalRequest(BaseModel):
+    role: Role
+    
 
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=254)
@@ -56,7 +84,8 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     full_name: str
-    role: Role
+    role: Role | None
+    status: UserStatus
     created_at: datetime
 
 
