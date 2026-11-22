@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administrator view — UI proposal</title>
+  <link rel="stylesheet" href="mockups.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">▧</span><span>Video Annotation<small>PLATFORM</small></span></div>
+      <div class="side-label">WORKSPACE</div>
+      <div class="side-item selected">▣ <span>Video library</span></div>
+      <div class="side-item">▤ <span>Annotations</span></div>
+      <div class="side-item">◫ <span>Team</span></div>
+      <div class="side-label lower">ACCOUNT</div>
+      <div class="side-item">⚙ <span>Settings</span></div>
+      <div class="sidebar-bottom"><span class="avatar">AD</span><span>Administrator<small>admin@example.com</small></span><span class="dots">•••</span></div>
+    </aside>
+    <main class="main admin-main">
+      <header class="topbar"><span>Workspace <span class="crumb">/</span> Video library</span><span class="topbar-right"><span class="live-dot"></span> Workspace active <span class="divider"></span> Help</span></header>
+      <div class="content">
+        <div class="eyebrow">ADMINISTRATOR</div>
+        <div class="title-row"><div><h1>Video library</h1><p>Upload videos and follow their processing status.</p></div><div class="outline-button">＋ Invite annotator</div></div>
+        <div class="stats">
+          <div class="stat"><span>Total videos</span><strong>12</strong><small>Across this workspace</small></div>
+          <div class="stat"><span>Ready to annotate</span><strong>8</strong><small><i class="green-dot"></i> Processing complete</small></div>
+          <div class="stat"><span>Processing</span><strong>3</strong><small><i class="amber-dot"></i> Waiting for frames</small></div>
+          <div class="stat"><span>Needs attention</span><strong>1</strong><small><i class="red-dot"></i> Upload or processing failed</small></div>
+        </div>
+        <section class="card upload-card">
+          <div><div class="card-heading">Upload a video</div><p>MP4 or MOV · Maximum 500 MB</p></div>
+          <div class="drop-zone"><div class="upload-icon">⇧</div><strong>Drag a video here or browse files</strong><small>The file is checked before upload starts.</small><span class="primary-button">Choose file</span></div>
+          <div class="upload-example"><span class="file-icon">▶</span><div class="upload-name"><strong>interview_session_04.mp4</strong><small>84.2 MB · Uploading</small></div><div class="mini-progress"><div></div></div><strong class="upload-number">64%</strong></div>
+        </section>
+        <section class="card library-card">
+          <div class="library-head"><div><div class="card-heading">All videos <span class="count">12</span></div><p>Open a completed video to review or annotate it.</p></div><div class="toolbar"><span class="search">⌕ &nbsp; Search videos</span><span class="filter">Status ▾</span></div></div>
+          <table><thead><tr><th>VIDEO</th><th>SIZE</th><th>STATUS</th><th>UPLOADED</th><th>ANNOTATIONS</th><th></th></tr></thead><tbody>
+            <tr><td><span class="table-icon">▶</span><span class="file-cell">training_demo.mp4<small>02:18 · MP4</small></span></td><td>46.3 MB</td><td><span class="badge ready">● &nbsp; Ready</span></td><td>21 Nov 2026</td><td>6 segments</td><td><span class="row-action">Open →</span></td></tr>
+            <tr><td><span class="table-icon">▶</span><span class="file-cell">interview_session_03.mov<small>08:42 · MOV</small></span></td><td>214.8 MB</td><td><span class="badge ready">● &nbsp; Ready</span></td><td>21 Nov 2026</td><td>2 segments</td><td><span class="row-action">Open →</span></td></tr>
+            <tr><td><span class="table-icon">▶</span><span class="file-cell">field_recording_02.mp4<small>04:09 · MP4</small></span></td><td>96.1 MB</td><td><span class="badge processing">● &nbsp; Processing</span></td><td>20 Nov 2026</td><td>—</td><td><span class="muted-action">Details →</span></td></tr>
+          </tbody></table>
+        </section>
+        <div class="proposal-note">UI PROPOSAL <span>Illustrative content · not live application data</span></div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
