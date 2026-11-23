@@ -67,12 +67,17 @@ test('administrator approves and assigns a video that the annotator can annotate
     await expect(videoRow).toBeVisible();
     await expect(videoRow.locator('.video-status')).toHaveText('COMPLETED', { timeout: 120_000 });
     await videoRow.getByRole('button', { name: 'Assign' }).click();
-    await expect(page.getByText('Click the field to browse available annotators, or type to search.')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Search results' })).toHaveCount(0);
     const annotatorSearch = page.getByLabel('Find annotator');
     await annotatorSearch.click();
     await expect(page.getByRole('list', { name: 'Available annotators' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Available annotators' })).toContainText(email);
+    const inputBox = await annotatorSearch.boundingBox();
+    const dropdownBox = await page.locator('.annotator-dropdown').boundingBox();
+    if (!inputBox || !dropdownBox) throw new Error('Annotator dropdown is missing');
+    expect(dropdownBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height - 2);
+    expect(dropdownBox.y).toBeLessThan(inputBox.y + inputBox.height + 3);
+    expect(Math.abs(dropdownBox.width - inputBox.width)).toBeLessThan(3);
     await page.getByRole('heading', { name: 'Assign video' }).click();
     await expect(page.getByRole('list', { name: 'Available annotators' })).toHaveCount(0);
     await annotatorSearch.fill('no-such-annotator@example.com');
