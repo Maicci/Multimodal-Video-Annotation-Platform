@@ -357,6 +357,11 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
     }
   }
 
+  // One gain for the whole clip keeps relative loudness intact. Limit the gain
+  // so near-silent noise does not become a full-height waveform.
+  const waveformMaximum = waveform?.peaks.reduce((maximum, peak) => Math.max(maximum, peak), 0) || 0;
+  const waveformGain = waveformMaximum > 0 ? Math.min(50, 1 / waveformMaximum) : 1;
+
   return (
     <section className="annotation-workspace">
       <div className="top-row">
@@ -424,16 +429,21 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
         {!waveform && !waveformError && <p>Loading waveform…</p>}
         {waveform?.status === "no_audio" && <p>This video has no audio track.</p>}
         {waveform && waveform.peaks.length > 0 && <>
-          <svg viewBox="0 0 1000 100" width="100%" height="100" role="img" aria-label="Waveform with segment selection and playback position"
+          <svg viewBox="0 0 1000 100" preserveAspectRatio="none" width="100%" height="120" role="img" aria-label="Waveform with segment selection and playback position"
             style={{ touchAction: "none", cursor: "ew-resize" }}
             onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const box = event.currentTarget.getBoundingClientRect(); handleTimelineChange(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * waveform.duration); }}
             onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) { const box = event.currentTarget.getBoundingClientRect(); handleTimelineChange(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * waveform.duration); } }}
             onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}>
             <rect width="1000" height="100" fill="#222733" />
             <rect x={draft.start_time / waveform.duration * 1000} width={Math.max(0, (draft.end_time - draft.start_time) / waveform.duration * 1000)} height="100" fill="#345b91" />
-            <path d={waveform.peaks.map((peak, i) => `M${i / waveform.peaks.length * 1000},${50 - peak * 45}v${Math.max(1, peak * 90)}`).join(" ")} stroke="#a8d8ff" />
-            <line x1={currentTime / waveform.duration * 1000} x2={currentTime / waveform.duration * 1000} y1="0" y2="100" stroke="white" strokeWidth="2" />
+            <line x1="0" x2="1000" y1="50" y2="50" stroke="#617386" vectorEffect="non-scaling-stroke" />
+            <path d={waveform.peaks.map((peak, i) => {
+              const amplitude = Math.min(1, peak * waveformGain) * 44;
+              return `M${(i + 0.5) / waveform.peaks.length * 1000},${50 - amplitude}v${amplitude * 2}`;
+            }).join(" ")} stroke="#a8d8ff" vectorEffect="non-scaling-stroke" />
+            <line x1={currentTime / waveform.duration * 1000} x2={currentTime / waveform.duration * 1000} y1="0" y2="100" stroke="white" strokeWidth="2" vectorEffect="non-scaling-stroke" />
           </svg>
+          <small>Waveform height is scaled for visibility. Audio volume is unchanged.</small>
           <label>Seek audio waveform<input type="range" min="0" max={waveform.duration} step="0.01" value={currentTime} onChange={(event) => handleTimelineChange(Number(event.target.value))} /></label>
         </>}
       </section>
