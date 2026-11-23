@@ -67,8 +67,18 @@ test('administrator approves and assigns a video that the annotator can annotate
     await expect(videoRow).toBeVisible();
     await expect(videoRow.locator('.video-status')).toHaveText('COMPLETED', { timeout: 120_000 });
     await videoRow.getByRole('button', { name: 'Assign' }).click();
-    await page.getByLabel('Annotator email').fill(email);
+    const annotatorSearch = page.getByLabel('Annotator', { exact: true });
+    await annotatorSearch.fill('no-such-annotator@example.com');
+    await expect(page.getByText('No matching annotators.')).toBeVisible();
+    await expect(page.locator('.modal-backdrop').getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
+    await annotatorSearch.fill(email.slice(0, 20));
+    await page.getByRole('list', { name: 'Matching annotators' }).getByRole('button', { name: new RegExp(email) }).click();
+    await expect(page.getByText(`Selected: Assignment Test Annotator (${email})`)).toBeVisible();
+    const assignmentRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/assignments') && request.method() === 'POST',
+    );
     await page.locator('.modal-backdrop').getByRole('button', { name: 'Assign', exact: true }).click();
+    expect((await assignmentRequest).postDataJSON().annotator_id).toBe(userId);
     await expect(page.getByText('Video assigned successfully.')).toBeVisible();
     await page.getByRole('button', { name: 'Close assign video' }).click();
     await page.getByRole('button', { name: 'Sign out' }).click();

@@ -352,6 +352,36 @@
   background-color: #303744;
 }
 
+.annotator-suggestions {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #48515f;
+}
+
+.annotator-suggestions li + li {
+  border-top: 1px solid #343b46;
+}
+
+.annotator-suggestions button {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+}
+
+.annotator-suggestions span,
+.selected-annotator {
+  color: #cbd5e1;
+}
+
 /* Approve button */
 
 .pending-users-content td button:first-child {
