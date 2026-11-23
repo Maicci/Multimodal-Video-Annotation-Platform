@@ -64,6 +64,7 @@ def test_upload_processing_playback_and_cleanup(client: TestClient, sample_video
     assert listed.status_code == 200, listed.text
     assert listed.json()[0]["status"] == "COMPLETED"
 
+    client.headers.update(headers)
     stream = client.get(f"{base}/stream")
     assert stream.status_code == 200
     assert stream.content == sample_video

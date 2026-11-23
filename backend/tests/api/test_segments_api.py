@@ -20,7 +20,11 @@ def client(test_database_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPat
             duration_seconds=12.5, width=640, height=480, fps=25, codec="h264",
         )),
     )
-    monkeypatch.setattr("app.api.routes.videos.process_video", Mock())
+    def timing(video_id, database_url, video_path, timeline_path, thumbnails_dir):
+        import numpy as np
+        Path(timeline_path).parent.mkdir(parents=True, exist_ok=True)
+        np.save(timeline_path, np.arange(0, 12.5, 0.04))
+    monkeypatch.setattr("app.api.routes.videos.process_video", timing)
     app = create_app(Settings(
         database_url=test_database_url,
         jwt_secret_key="test-signing-key-with-at-least-32-characters",
@@ -85,12 +89,17 @@ def test_segments_save_reload_edit_and_isolate_users(client: TestClient) -> None
     })
     assert user.status_code == 201, user.text
     other = _login(client, "other@example.com", "secure-test-password-123")
+    assert client.get(url, headers=_auth(other)).status_code == 403
+    assigned = client.post("/api/assignments", headers=_auth(admin), json={
+        "video_id": video_id, "annotator_id": user.json()["id"],
+    })
+    assert assigned.status_code == 200, assigned.text
     assert client.get(url, headers=_auth(other)).json() == []
     assert client.put(f"{url}/{segment_id}", headers=_auth(other), json=payload).status_code == 404
     assert client.delete(f"{url}/{segment_id}", headers=_auth(other)).status_code == 404
     assert client.get(url, headers=_auth(admin)).json()[0]["id"] == segment_id
 
-    deleted = client.delete(f"{url}/{segment_id}", headers=_auth(admin))
+    deleted = client.delete(f"{url}/{segment_id}?version=2", headers=_auth(admin))
     assert deleted.status_code == 204, deleted.text
     assert client.get(url, headers=_auth(admin)).json() == []
     assert client.delete(f"{url}/{segment_id}", headers=_auth(admin)).status_code == 404
@@ -110,7 +119,7 @@ def test_video_summary_is_saved_and_isolated_per_annotator(client: TestClient) -
     saved = client.put(url, headers=_auth(admin), json={"summary": "Opening scene."})
     assert saved.status_code == 200, saved.text
     assert client.get(url, headers=_auth(admin)).json()["summary"] == "Opening scene."
-    assert client.put(url, headers=_auth(admin), json={"summary": "Revised summary."}).status_code == 200
+    assert client.put(url, headers=_auth(admin), json={"summary": "Revised summary.", "version": 1}).status_code == 200
     assert client.get(url, headers=_auth(admin)).json()["summary"] == "Revised summary."
 
     user = client.post("/api/users", headers=_auth(admin), json={
@@ -119,7 +128,56 @@ def test_video_summary_is_saved_and_isolated_per_annotator(client: TestClient) -
     })
     assert user.status_code == 201, user.text
     other = _login(client, "summary@example.com", "secure-test-password-123")
+    assert client.get(url, headers=_auth(other)).status_code == 403
+    assigned = client.post("/api/assignments", headers=_auth(admin), json={
+        "video_id": upload.json()["id"], "annotator_id": user.json()["id"],
+    })
+    assert assigned.status_code == 200, assigned.text
     assert client.get(url, headers=_auth(other)).json()["summary"] == ""
     assert client.put(url, headers=_auth(other), json={"summary": "Another view."}).status_code == 200
     assert client.get(url, headers=_auth(admin)).json()["summary"] == "Revised summary."
     assert client.get(url, headers=_auth(other)).json()["summary"] == "Another view."
+
+
+def test_access_media_scope_and_stale_saves(client: TestClient) -> None:
+    admin = _login(client, "admin@example.com", "initial-admin-password-123")
+    headers = _auth(admin)
+    video = client.post("/api/videos/upload", headers=headers, files={"upload": ("access.mp4", b"video", "video/mp4")}).json()
+    base = f"/api/videos/{video['id']}"
+    assert client.get(f"{base}/stream").status_code == 401
+    token = client.post(f"{base}/media-token", headers=headers).json()["token"]
+    assert client.get(f"{base}/stream", params={"media_token": token}).status_code == 200
+    assert client.get("/api/auth/me", headers=_auth(token)).status_code == 401
+    from uuid import uuid4
+    assert client.get(f"/api/videos/{uuid4()}/stream", params={"media_token": token}).status_code == 401
+    data = {"title": "Scene", "start_time": 0, "end_time": 1, "description": "Visible", "audio_description": "Silent"}
+    segment = client.post(f"{base}/segments", headers=headers, json=data).json()
+    url = f"{base}/segments/{segment['id']}"
+    assert client.put(url, headers=headers, json={**data, "version": segment["version"]}).status_code == 200
+    assert client.put(url, headers=headers, json={**data, "version": segment["version"]}).status_code == 409
+    assert client.delete(url, headers=headers, params={"version": segment["version"]}).status_code == 409
+    assert client.put(f"{base}/summary", headers=headers, json={"summary": "First", "version": 0}).status_code == 200
+    assert client.put(f"{base}/summary", headers=headers, json={"summary": "Stale", "version": 0}).status_code == 409
+    assert client.get(f"{base}/summary", headers=headers).json()["summary"] == "First"
+
+
+def test_summary_progress_and_completion(client: TestClient) -> None:
+    admin = _login(client, "admin@example.com", "initial-admin-password-123")
+    headers = _auth(admin)
+    video = client.post("/api/videos/upload", headers=headers, files={"upload": ("complete.mp4", b"video", "video/mp4")}).json()
+    base = f"/api/videos/{video['id']}"
+    user = client.post("/api/users", headers=headers, json={"email": "completion@example.com", "full_name": "Annotator", "password": "secure-test-password-123", "role": "annotator"}).json()
+    annotator = _auth(_login(client, "completion@example.com", "secure-test-password-123"))
+    assert client.get("/api/videos", headers=annotator).json() == []
+    assert client.get(f"{base}/stream", headers=annotator).status_code == 403
+    client.post("/api/assignments", headers=headers, json={"video_id": video["id"], "annotator_id": user["id"]})
+    assert client.get(f"{base}/stream", headers=annotator).status_code == 200
+    assert client.post(f"{base}/annotation-session/complete", headers=annotator).status_code == 422
+    client.put(f"{base}/summary", headers=annotator, json={"summary": "My summary"})
+    assert client.get("/api/me/assignments", headers=annotator).json()[0]["status"] == "in_progress"
+    data = {"title": "Scene", "start_time": 0, "end_time": 1, "description": "Visible", "audio_description": "Silent"}
+    segment = client.post(f"{base}/segments", headers=annotator, json=data).json()
+    assert client.post(f"{base}/annotation-session/complete", headers=annotator).status_code == 200
+    assert client.get(f"{base}/annotation-session", headers=annotator).json()["status"] == "completed"
+    client.put(f"{base}/segments/{segment['id']}", headers=annotator, json={**data, "version": segment["version"]})
+    assert client.get(f"{base}/annotation-session", headers=annotator).json()["status"] == "in_progress"

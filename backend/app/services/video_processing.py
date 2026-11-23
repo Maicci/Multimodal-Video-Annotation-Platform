@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 
+from app.services.waveform import generate_waveform
 import psycopg
 from app.db.database import Database
 from app.repositories.video_repository import (
@@ -109,6 +110,7 @@ def process_video(video_id: str, database_url: str, video_path: str | Path, time
             )
 
         generate_thumbnails(video_path, thumbnails_dir)
+        generate_waveform(video_path)
         with closing(Database(database_url).connect()) as connection:
             complete_video_processing(connection, video_id)
     except Exception:

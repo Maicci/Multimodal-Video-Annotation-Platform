@@ -77,6 +77,7 @@ def remove_video_files(video_path: Path) -> None:
     stem = video_path.stem
     try:
         video_path.unlink(missing_ok=True)
+        (root / "waveforms" / f"{stem}.json").unlink(missing_ok=True)
         (root / "timelines" / f"{stem}.npy").unlink(missing_ok=True)
         shutil.rmtree(root / "thumbnails" / stem, ignore_errors=True)
     except OSError:

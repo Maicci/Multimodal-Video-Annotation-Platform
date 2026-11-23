@@ -136,6 +136,10 @@ class Database:
                 """
             )
 
+            connection.execute("ALTER TABLE segments ADD COLUMN IF NOT EXISTS start_frame INTEGER")
+            connection.execute("ALTER TABLE segments ADD COLUMN IF NOT EXISTS end_frame INTEGER")
+            connection.execute("ALTER TABLE segments ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1")
+            connection.execute("ALTER TABLE video_summaries ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1")
             connection.execute(
                 "ALTER TABLE videos ADD COLUMN IF NOT EXISTS protocol_group TEXT "
                 "NOT NULL DEFAULT 'individual' CHECK (protocol_group IN ('shared', 'individual'))"

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, Response
 
 from app.api.dependencies import Connection, CurrentUser, get_settings
 from app.core.config import Settings
+from app.api.video_access import require_video_access, create_media_token
 from app.repositories.video_repository import (
     create_video,
     delete_video,
@@ -50,6 +51,12 @@ def list_all_videos(
     connection: Connection,
     user: CurrentUser,
 ) -> list[VideoListItem]:
+    videos = list_videos(connection)
+    if user["role"] == "annotator":
+        assigned = {str(row["video_id"]) for row in connection.execute(
+            "SELECT video_id FROM video_assignments WHERE user_id = %s", (str(user["id"]),)
+        ).fetchall()}
+        videos = [video for video in videos if str(video.id) in assigned]
     return [
         VideoListItem(
             id=UUID(v.id),
@@ -59,7 +66,7 @@ def list_all_videos(
             uploaded_at=v.upload_time,
             duration=v.duration_seconds,
         )
-        for v in list_videos(connection)
+        for v in videos
     ]
 
 @router.delete(
@@ -115,6 +122,9 @@ def upload_video(
     user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> VideoUploadResponse | JSONResponse:
+
+    if user["role"] != "administrator":
+        return _error(403, "Administrator role required")
 
     # Check filename
     filename = (upload.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
@@ -228,3 +238,10 @@ def upload_video(
         status=video.processing_status,
         duration=video.duration_seconds,
     )
+
+
+@router.post("/{video_id}/media-token")
+def playback_token(video_id: UUID, connection: Connection, user: CurrentUser,
+                   settings: Annotated[Settings, Depends(get_settings)]):
+    require_video_access(connection, video_id, user)
+    return {"token": create_media_token(video_id, user, settings), "expires_in": 300}

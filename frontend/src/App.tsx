@@ -7,6 +7,7 @@ import VideoViewer from "./features/videos/VideoViewer";
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 function App() {
+  const [annotationDirty, setAnnotationDirty] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [token, setToken] = useState(() => localStorage.getItem("access_token"));
   const [role, setRole] = useState<string | null>(null);
@@ -57,8 +58,8 @@ function App() {
   if (videoId) {
     return (
       <main>
-        <button type="button" onClick={() => setVideoId(null)}>Back to videos</button>
-        <VideoViewer videoId={videoId} />
+        <button type="button" onClick={() => { if (!annotationDirty || window.confirm("Discard unsaved annotation changes?")) { setAnnotationDirty(false); setVideoId(null); } }}>Back to videos</button>
+        <VideoViewer videoId={videoId} onDirtyChange={setAnnotationDirty} />
       </main>
     );
   }
