@@ -22,3 +22,5 @@ class Video:
     codec: str | None
     processing_status: str
     metadata_extracted: bool
+
+    processing_error: str | None = None

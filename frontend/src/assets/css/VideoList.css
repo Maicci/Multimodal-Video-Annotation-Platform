@@ -59,7 +59,8 @@
   color: #a7f3d0;
 }
 
-.video-status.processing {
+.video-status.queued,
+.video-status.running {
   background-color: #1e3a5f;
   color: #bfdbfe;
 }

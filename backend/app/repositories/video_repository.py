@@ -18,7 +18,7 @@ from app.services.video_storage import StoredVideo
 _VIDEO_COLUMNS = """
     id, original_filename, stored_filename, storage_path, uploader_id,
     upload_time, file_size_bytes, mime_type, duration_seconds, width,
-    height, fps, codec, processing_status, metadata_extracted
+    height, fps, codec, processing_status, metadata_extracted, processing_error
 """
 
 
@@ -39,6 +39,7 @@ def _row_to_video(row: dict[str, Any]) -> Video:
         codec=row["codec"],
         processing_status=row["processing_status"],
         metadata_extracted=row["metadata_extracted"],
+        processing_error=row["processing_error"],
     )
 
 
@@ -91,7 +92,7 @@ def create_video(
                 metadata_extracted, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    'PENDING', TRUE, %s)
+                    'QUEUED', TRUE, %s)
             RETURNING {_VIDEO_COLUMNS}
             """,
             (
@@ -139,8 +140,8 @@ def start_video_processing(
         result = connection.execute(
             """
             UPDATE videos
-            SET processing_status = 'PROCESSING', updated_at = %s
-            WHERE id = %s AND processing_status = 'PENDING'
+            SET processing_status = 'RUNNING', updated_at = %s
+            WHERE id = %s AND processing_status = 'QUEUED'
             """,
             (datetime.now(timezone.utc), video_id),
         )
@@ -166,15 +167,15 @@ def save_timeline_info(
         )
 
 
-def fail_video_processing(connection: psycopg.Connection, video_id: str) -> None:
+def fail_video_processing(connection: psycopg.Connection, video_id: str, error: str = "Processing failed") -> None:
     with connection:
         connection.execute(
             """
             UPDATE videos
-            SET processing_status = 'FAILED', updated_at = %s
+            SET processing_status = 'FAILED', processing_error = %s, updated_at = %s
             WHERE id = %s
             """,
-            (datetime.now(timezone.utc), video_id),
+            (error, datetime.now(timezone.utc), video_id),
         )
 
 
@@ -184,7 +185,7 @@ def complete_video_processing(connection: psycopg.Connection, video_id: str) -> 
             """
             UPDATE videos
             SET processing_status = 'COMPLETED', updated_at = %s
-            WHERE id = %s AND processing_status = 'PROCESSING'
+            WHERE id = %s AND processing_status = 'RUNNING'
             """,
             (datetime.now(timezone.utc), video_id),
         )

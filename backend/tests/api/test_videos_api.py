@@ -105,7 +105,7 @@ def test_upload_video_persists_bytes_metadata_and_uploader(
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["filename"] == filename
-    assert body["status"] == "PENDING"
+    assert body["status"] == "QUEUED"
     assert body["duration"] == 12.5
     connection = _app(client).state.database.connect()
     try:
@@ -125,7 +125,7 @@ def test_upload_video_persists_bytes_metadata_and_uploader(
     assert row["height"] == 1080
     assert row["fps"] == 29.97
     assert row["codec"] == "h264"
-    assert row["processing_status"] == "PENDING"
+    assert row["processing_status"] == "QUEUED"
     stored_path = Path(row["storage_path"])
     assert stored_path.read_bytes() == VIDEO_BYTES
     queued.assert_called_once()

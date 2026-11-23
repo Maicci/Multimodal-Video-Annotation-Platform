@@ -76,10 +76,10 @@ def generate_thumbnails(
             shutil.copyfile(generated[-1], target)
 
 
-def _mark_failed(database_url: str, video_id: str) -> None:
+def _mark_failed(database_url: str, video_id: str, error: str) -> None:
     try:
         with closing(Database(database_url).connect()) as connection:
-            fail_video_processing(connection, video_id)
+            fail_video_processing(connection, video_id, error)
     except psycopg.Error:
         logger.exception("Could not mark video %s as failed", video_id)
 
@@ -113,9 +113,9 @@ def process_video(video_id: str, database_url: str, video_path: str | Path, time
         generate_waveform(video_path)
         with closing(Database(database_url).connect()) as connection:
             complete_video_processing(connection, video_id)
-    except Exception:
+    except Exception as error:
         logger.exception("Processing failed for video %s", video_id)
-        _mark_failed(database_url, video_id)
+        _mark_failed(database_url, video_id, f"{type(error).__name__}: {str(error)[:1000]}")
         return
 
     logger.info("Video %s processing completed", video_id)

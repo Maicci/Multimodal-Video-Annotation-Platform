@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export type VideoItem = {
   id: string;
   filename: string;
@@ -5,6 +7,9 @@ export type VideoItem = {
   status: string;
   uploaded_at: string;
   duration: number | null;
+  processing_error?: string | null;
+  transcription_status?: string | null;
+  transcription_error?: string | null;
 };
 
 type Props = {
@@ -15,9 +20,25 @@ type Props = {
 };
 
 function VideoList({ videos, onDelete, onView, onAssign }: Props) {
+  const [jobMessage, setJobMessage] = useState("");
+  const [starting, setStarting] = useState<string | null>(null);
+  async function transcribe(videoId: string) {
+    setStarting(videoId);
+    setJobMessage("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/videos/${videoId}/transcription`, {
+        method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not start transcription.");
+      setJobMessage("Transcription queued. Its status will update in the video list.");
+    } catch (cause) { setJobMessage(cause instanceof Error ? cause.message : "Could not start transcription."); }
+    finally { setStarting(null); }
+  }
   return (
     <section className="video-list">
       <h2>Video list</h2>
+      {jobMessage && <p>{jobMessage}</p>}
 
       <div className="video-table-wrapper">
         <table className="video-table">
@@ -46,6 +67,9 @@ function VideoList({ videos, onDelete, onView, onAssign }: Props) {
                   <span className={`video-status ${v.status.toLowerCase()}`}>
                     {v.status}
                   </span>
+                  {v.processing_error && <p>{v.processing_error}</p>}
+                  {v.transcription_status && <p>Transcription: {v.transcription_status}</p>}
+                  {v.transcription_error && <p>{v.transcription_error}</p>}
                 </td>
                 <td>{new Date(v.uploaded_at).toLocaleString()}</td>
                 <td>—</td>
@@ -67,6 +91,9 @@ function VideoList({ videos, onDelete, onView, onAssign }: Props) {
                     onClick={() => onDelete(v)}
                   >
                     Delete
+                  </button>
+                  <button type="button" onClick={() => void transcribe(v.id)} disabled={starting !== null || v.status !== "COMPLETED" || ["QUEUED", "RUNNING"].includes(v.transcription_status || "")}>
+                    {starting === v.id ? "Starting…" : "Transcribe audio"}
                   </button>
                 </td>
               </tr>

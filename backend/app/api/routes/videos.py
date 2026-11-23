@@ -57,6 +57,11 @@ def list_all_videos(
             "SELECT video_id FROM video_assignments WHERE user_id = %s", (str(user["id"]),)
         ).fetchall()}
         videos = [video for video in videos if str(video.id) in assigned]
+    jobs = {}
+    if user["role"] == "administrator":
+        jobs = {str(row["video_id"]): row for row in connection.execute(
+            "SELECT DISTINCT ON (video_id) video_id, status, error FROM processing_jobs ORDER BY video_id, created_at DESC"
+        ).fetchall()}
     return [
         VideoListItem(
             id=UUID(v.id),
@@ -65,6 +70,9 @@ def list_all_videos(
             status=v.processing_status,
             uploaded_at=v.upload_time,
             duration=v.duration_seconds,
+            processing_error=v.processing_error if user["role"] == "administrator" else None,
+            transcription_status=jobs.get(v.id, {}).get("status"),
+            transcription_error=jobs.get(v.id, {}).get("error"),
         )
         for v in videos
     ]
@@ -87,6 +95,9 @@ def remove_video(
     if user.get("role") != "administrator":
         return _error(403, "Administrator role required")
 
+    busy = connection.execute("SELECT 1 FROM processing_jobs WHERE video_id = %s AND status IN ('QUEUED', 'RUNNING')", (str(video_id),)).fetchone()
+    if busy:
+        return _error(409, "Wait for transcription to finish before deleting this video")
     try:
         video = delete_video(connection, str(video_id))
     except psycopg.errors.ForeignKeyViolation:
