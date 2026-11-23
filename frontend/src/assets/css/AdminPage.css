@@ -361,6 +361,11 @@
   border: 1px solid #48515f;
 }
 
+.annotator-search-heading {
+  margin: 0 0 8px;
+  color: #cbd5e1;
+}
+
 .annotator-suggestions li + li {
   border-top: 1px solid #343b46;
 }
