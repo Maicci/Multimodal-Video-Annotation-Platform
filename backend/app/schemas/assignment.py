@@ -21,4 +21,4 @@ class AssignmentOut(BaseModel):
 
 class AssignmentCreate(BaseModel):
     video_id: UUID
-    annotator_email: str
+    annotator_id: UUID

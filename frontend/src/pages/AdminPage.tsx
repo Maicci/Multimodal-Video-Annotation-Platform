@@ -8,6 +8,14 @@ import "../assets/css/AdminPage.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+type AssignableUser = {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string | null;
+  status: string;
+};
+
 function AdminPage({
   onView,
   onSignOut,
@@ -21,7 +29,11 @@ function AdminPage({
   const [showPendingUsers, setShowPendingUsers] = useState(false);
 
   const [assignVideoId, setAssignVideoId] = useState<string | null>(null);
-  const [assignEmail, setAssignEmail] = useState("");
+  const [assignQuery, setAssignQuery] = useState("");
+  const [showAnnotatorOptions, setShowAnnotatorOptions] = useState(false);
+  const [assignAnnotatorId, setAssignAnnotatorId] = useState<string | null>(null);
+  const [assignUsers, setAssignUsers] = useState<AssignableUser[] | null>(null);
+  const [assignUsersError, setAssignUsersError] = useState("");
   const [assignError, setAssignError] = useState("");
   const [assignMessage, setAssignMessage] = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
@@ -77,6 +89,42 @@ function AdminPage({
     return () => window.clearInterval(interval);
   }, [loadVideos]);
 
+  useEffect(() => {
+    if (!assignVideoId) return;
+    const token = localStorage.getItem("access_token");
+    const controller = new AbortController();
+    setAssignUsers(null);
+    setAssignUsersError("");
+    if (!token) {
+      setAssignUsersError("Sign in again to load annotators.");
+      return;
+    }
+    fetch(`${API_URL}/api/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not load annotators (${response.status}).`);
+        return response.json() as Promise<AssignableUser[]>;
+      })
+      .then((users) => setAssignUsers(users.filter(
+        (user) => user.role === "annotator" && user.status === "active"
+      )))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setAssignUsersError(error instanceof Error ? error.message : "Could not load annotators.");
+        }
+      });
+    return () => controller.abort();
+  }, [assignVideoId]);
+
+  const searchTerm = assignQuery.trim().toLowerCase();
+  const matchingAnnotators = assignUsers?.filter((user) =>
+    user.full_name.toLowerCase().includes(searchTerm) ||
+    user.email.toLowerCase().includes(searchTerm)
+  ) ?? [];
+  const selectedAnnotator = assignUsers?.find((user) => user.id === assignAnnotatorId);
+
   const deleteVideo = useCallback(
     async (video: VideoItem) => {
       const confirmed = window.confirm(
@@ -127,14 +175,16 @@ function AdminPage({
 
   const closeAssignModal = () => {
     setAssignVideoId(null);
-    setAssignEmail("");
+    setAssignQuery("");
+    setShowAnnotatorOptions(false);
+    setAssignAnnotatorId(null);
     setAssignError("");
     setAssignMessage("");
     setAssignLoading(false);
   };
 
   const assignVideo = async () => {
-    if (!assignVideoId) {
+    if (!assignVideoId || !assignAnnotatorId) {
       return;
     }
 
@@ -158,7 +208,7 @@ function AdminPage({
         },
         body: JSON.stringify({
           video_id: assignVideoId,
-          annotator_email: assignEmail.trim(),
+          annotator_id: assignAnnotatorId,
         }),
       });
 
@@ -173,7 +223,9 @@ function AdminPage({
       }
 
       setAssignMessage("Video assigned successfully.");
-      setAssignEmail("");
+      setAssignQuery("");
+      setShowAnnotatorOptions(false);
+      setAssignAnnotatorId(null);
     } catch (err) {
       console.error("Assignment request failed:", err);
       setAssignError("Could not reach the server.");
@@ -287,14 +339,14 @@ function AdminPage({
           onMouseDown={closeAssignModal}
         >
           <div
-            className="pending-users-modal"
+            className="pending-users-modal assign-video-modal"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
               <div>
                 <h2>Assign video</h2>
                 <p>
-                  Assign this video to an annotator by email.
+                  Choose an annotator to assign this video.
                 </p>
               </div>
 
@@ -310,18 +362,69 @@ function AdminPage({
 
             <div className="pending-users-content">
               <label htmlFor="annotator-email">
-                Annotator email
+                Find annotator
               </label>
 
-              <input
-                id="annotator-email"
-                type="email"
-                value={assignEmail}
-                onChange={(event) =>
-                  setAssignEmail(event.target.value)
-                }
-                placeholder="annotator@example.com"
-              />
+              <div
+                className="annotator-picker"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setShowAnnotatorOptions(false);
+                  }
+                }}
+              >
+                <input
+                  id="annotator-email"
+                  type="text"
+                  value={assignQuery}
+                  onFocus={() => setShowAnnotatorOptions(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setShowAnnotatorOptions(false);
+                  }}
+                  onChange={(event) => {
+                    setAssignQuery(event.target.value);
+                    setAssignAnnotatorId(null);
+                    setAssignMessage("");
+                    setShowAnnotatorOptions(true);
+                  }}
+                  placeholder="Name or email"
+                  autoComplete="off"
+                />
+                <span className="annotator-picker-chevron" aria-hidden="true">▾</span>
+
+                {showAnnotatorOptions && (
+                  <div className="annotator-dropdown">
+                    {assignUsersError && <p role="alert" className="annotator-dropdown-message">{assignUsersError}</p>}
+                    {!assignUsers && !assignUsersError && <p className="annotator-dropdown-message">Loading annotators…</p>}
+                    {assignUsers && assignUsers.length === 0 && <p className="annotator-dropdown-message">No active annotators are available.</p>}
+                    {assignUsers && assignUsers.length > 0 && (
+                      matchingAnnotators.length > 0 ? (
+                        <>
+                          <p className="annotator-search-heading">
+                            {searchTerm ? "Search results" : "Available annotators"}
+                          </p>
+                          <ul className="annotator-suggestions" aria-label={searchTerm ? "Search results" : "Available annotators"}>
+                            {matchingAnnotators.map((user) => (
+                              <li key={user.id}>
+                                <button type="button" onClick={() => {
+                                  setAssignAnnotatorId(user.id);
+                                  setAssignQuery(user.email);
+                                  setShowAnnotatorOptions(false);
+                                  setAssignError("");
+                                }}>
+                                  <strong>{user.full_name}</strong>
+                                  <span>{user.email}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : <p className="annotator-dropdown-message">No matching annotators.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              {selectedAnnotator && <p className="selected-annotator">Selected: {selectedAnnotator.full_name} ({selectedAnnotator.email})</p>}
 
               {assignError && (
                 <p className="admin-error">
@@ -339,7 +442,7 @@ function AdminPage({
                 type="button"
                 onClick={assignVideo}
                 disabled={
-                  assignLoading || !assignEmail.trim()
+                  assignLoading || !assignAnnotatorId
                 }
               >
                 {assignLoading

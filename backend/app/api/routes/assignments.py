@@ -1,3 +1,4 @@
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import (
@@ -6,7 +7,7 @@ from app.api.dependencies import (
     require_roles,
 )
 from app.repositories.assignment_repository import AssignmentRepository
-from app.repositories.user_repository import find_user_by_email
+from app.repositories.user_repository import find_user_by_id
 from app.schemas.assignment import AssignmentCreate, AssignmentOut
 from app.schemas.user import Role
 
@@ -30,9 +31,9 @@ def create_assignment(
     database=Depends(get_database),
 ):
     with database.connect() as connection:
-        user = find_user_by_email(
+        user = find_user_by_id(
             connection,
-            request.annotator_email,
+            str(request.annotator_id),
         )
 
     if user is None:
@@ -53,7 +54,18 @@ def create_assignment(
             detail="User is not an annotator",
         )
 
-    return AssignmentRepository(database).create(
-        request.video_id,
-        user["id"],
-    )
+    try:
+        return AssignmentRepository(database).create(
+            request.video_id,
+            user["id"],
+        )
+    except psycopg.errors.UniqueViolation as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Video is already assigned to this annotator",
+        ) from error
+    except psycopg.errors.ForeignKeyViolation as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video not found",
+        ) from error
