@@ -113,8 +113,25 @@ class Database:
                     start_time DOUBLE PRECISION NOT NULL CHECK (start_time >= 0),
                     end_time DOUBLE PRECISION NOT NULL CHECK (end_time > start_time),
                     description TEXT NOT NULL DEFAULT '',
+                    audio_description TEXT NOT NULL DEFAULT '',
                     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                "ALTER TABLE segments ADD COLUMN IF NOT EXISTS audio_description "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS video_summaries (
+                    video_id UUID NOT NULL REFERENCES videos (id) ON DELETE CASCADE,
+                    author_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+                    summary TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (video_id, author_id)
                 )
                 """
             )

@@ -13,7 +13,8 @@ def list_segments(
 ) -> list[dict[str, Any]]:
     return connection.execute(
         """
-        SELECT id, video_id, author_id, title, start_time, end_time, description
+        SELECT id, video_id, author_id, title, start_time, end_time,
+               description, audio_description
         FROM segments
         WHERE video_id = %s AND author_id = %s
         ORDER BY start_time, created_at
@@ -30,13 +31,16 @@ def create_segment(
         return connection.execute(
             """
             INSERT INTO segments (
-                id, video_id, author_id, title, start_time, end_time, description
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id, video_id, author_id, title, start_time, end_time, description
+                id, video_id, author_id, title, start_time, end_time,
+                description, audio_description
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, video_id, author_id, title, start_time, end_time,
+                      description, audio_description
             """,
             (
                 str(uuid4()), video_id, author_id, payload.title,
                 payload.start_time, payload.end_time, payload.description,
+                payload.audio_description,
             ),
         ).fetchone()
 
@@ -50,13 +54,16 @@ def update_segment(
             """
             UPDATE segments
             SET title = %s, start_time = %s, end_time = %s,
-                description = %s, updated_at = CURRENT_TIMESTAMP
+                description = %s, audio_description = %s,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = %s AND video_id = %s AND author_id = %s
-            RETURNING id, video_id, author_id, title, start_time, end_time, description
+            RETURNING id, video_id, author_id, title, start_time, end_time,
+                      description, audio_description
             """,
             (
                 payload.title, payload.start_time, payload.end_time,
-                payload.description, segment_id, video_id, author_id,
+                payload.description, payload.audio_description,
+                segment_id, video_id, author_id,
             ),
         ).fetchone()
 
