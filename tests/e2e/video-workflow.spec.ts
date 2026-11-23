@@ -73,8 +73,10 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
 
     await page.getByRole('button', { name: '+ New segment' }).click();
     await page.getByLabel('Title').fill('Opening scene');
-    await page.getByLabel('Description').fill('A test pattern appears.');
+    await page.getByLabel('Video description').fill('A test pattern appears.');
+    await page.getByLabel('Audio description').fill('A steady test tone plays.');
 
+    await page.locator('.frame-timeline').scrollIntoViewIfNeeded();
     const timelineBox = await page.locator('.frame-timeline').boundingBox();
     const startBox = await page.locator('.start-handle').boundingBox();
     const endBox = await page.locator('.end-handle').boundingBox();
@@ -95,11 +97,16 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
 
     await page.getByRole('button', { name: 'Save segment' }).click();
     await expect(page.getByRole('status')).toHaveText('Segment saved.');
+    await page.getByLabel('Video summary').fill('A short test pattern video.');
+    await page.getByRole('button', { name: 'Save summary' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Summary saved.' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Videos', exact: true })).toBeVisible();
     await page.getByRole('row').filter({ hasText: filename }).getByRole('button', { name: 'View' }).click();
     await expect(page.getByLabel('Title')).toHaveValue('Opening scene');
-    await expect(page.getByLabel('Description')).toHaveValue('A test pattern appears.');
+    await expect(page.getByLabel('Video description')).toHaveValue('A test pattern appears.');
+    await expect(page.getByLabel('Audio description')).toHaveValue('A steady test tone plays.');
+    await expect(page.getByLabel('Video summary')).toHaveValue('A short test pattern video.');
     await expect(page.getByLabel('Start (seconds)')).toHaveValue(String(startTime));
 
     await page.getByLabel('Title').fill('Edited opening');

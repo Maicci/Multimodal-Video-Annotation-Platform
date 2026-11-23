@@ -109,7 +109,7 @@ test('administrator approves and assigns a video that the annotator can annotate
 
     await page.getByRole('button', { name: '+ New segment' }).click();
     await page.getByLabel('Title').fill('First scene');
-    await page.getByLabel('Description').fill('The test video begins.');
+    await page.getByLabel('Video description').fill('The test video begins.');
     await page.getByRole('button', { name: 'Save segment' }).click();
     await expect(page.getByRole('status')).toHaveText('Segment saved.');
     await page.getByRole('button', { name: 'Back to videos' }).click();

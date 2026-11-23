@@ -9,7 +9,9 @@ class SegmentInput(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     start_time: float = Field(ge=0, allow_inf_nan=False)
     end_time: float = Field(gt=0, allow_inf_nan=False)
+    # The existing description field holds the visual description.
     description: str = Field(default="", max_length=10000)
+    audio_description: str = Field(default="", max_length=10000)
 
     @field_validator("title")
     @classmethod

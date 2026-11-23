@@ -9,6 +9,7 @@ type SegmentInput = {
   start_time: number;
   end_time: number;
   description: string;
+  audio_description: string;
 };
 
 type Segment = SegmentInput & { id: string; video_id: string; author_id: string };
@@ -24,8 +25,12 @@ function VideoViewer({ videoId }: Props) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SegmentInput>({
-    title: "", start_time: 0, end_time: 0, description: "",
+    title: "", start_time: 0, end_time: 0, description: "", audio_description: "",
   });
+  const [summary, setSummary] = useState("");
+  const [summaryStatus, setSummaryStatus] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summarySaving, setSummarySaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -54,6 +59,37 @@ function VideoViewer({ videoId }: Props) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Could not load segments.");
         }
+      });
+    return () => controller.abort();
+  }, [videoId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setSummaryLoading(false);
+      setSummaryStatus("Sign in to load the summary.");
+      return;
+    }
+    setSummaryLoading(true);
+    setSummary("");
+    setSummaryStatus("");
+    fetch(`${API_URL}/api/videos/${videoId}/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not load summary (${response.status}).`);
+        return response.json() as Promise<{ summary: string }>;
+      })
+      .then((data) => setSummary(data.summary))
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setSummaryStatus(cause instanceof Error ? cause.message : "Could not load summary.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSummaryLoading(false);
       });
     return () => controller.abort();
   }, [videoId]);
@@ -98,6 +134,7 @@ function VideoViewer({ videoId }: Props) {
       start_time: Number(start.toFixed(2)),
       end_time: Number(Math.min(duration, start + 5).toFixed(2)),
       description: "",
+      audio_description: "",
     });
     setError("");
     setMessage("");
@@ -186,6 +223,32 @@ function VideoViewer({ videoId }: Props) {
     }
   }
 
+  async function saveSummary() {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setSummaryStatus("Sign in again to save the summary.");
+      return;
+    }
+    setSummarySaving(true);
+    setSummaryStatus("");
+    try {
+      const response = await fetch(`${API_URL}/api/videos/${videoId}/summary`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ summary }),
+      });
+      if (!response.ok) throw new Error(`Could not save summary (${response.status}).`);
+      setSummaryStatus("Summary saved.");
+    } catch (cause) {
+      setSummaryStatus(cause instanceof Error ? cause.message : "Could not save summary.");
+    } finally {
+      setSummarySaving(false);
+    }
+  }
+
   return (
     <section className="annotation-workspace">
       <div className="top-row">
@@ -262,10 +325,15 @@ function VideoViewer({ videoId }: Props) {
                 onChange={(event) => setDraft({ ...draft, end_time: Number(event.target.value) })} />
             </label>
           </div>
-          <label>Description
+          <label>Video description
             <textarea value={draft.description} maxLength={10000}
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-              placeholder="Describe what happens in the segment." />
+              placeholder="Describe what is visible in the segment." />
+          </label>
+          <label>Audio description
+            <textarea value={draft.audio_description} maxLength={10000}
+              onChange={(event) => setDraft({ ...draft, audio_description: event.target.value })}
+              placeholder="Describe speech, sounds, and other audio in the segment." />
           </label>
         </div>
         {error && <p role="alert">{error}</p>}
@@ -280,6 +348,21 @@ function VideoViewer({ videoId }: Props) {
             </button>
           )}
         </div>
+      </section>
+      <section className="annotation-details">
+        <h2>Whole-video summary</h2>
+        <label>Video summary
+          <textarea value={summary} maxLength={20000} disabled={summaryLoading || summarySaving}
+            onChange={(event) => {
+              setSummary(event.target.value);
+              setSummaryStatus("Unsaved changes");
+            }}
+            placeholder="Summarize the video as a whole." />
+        </label>
+        {summaryStatus && <p role="status">{summaryStatus}</p>}
+        <button type="button" onClick={saveSummary} disabled={summaryLoading || summarySaving}>
+          {summaryLoading ? "Loading…" : summarySaving ? "Saving…" : "Save summary"}
+        </button>
       </section>
     </section>
   );
