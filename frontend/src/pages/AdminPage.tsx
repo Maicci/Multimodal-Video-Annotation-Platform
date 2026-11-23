@@ -30,6 +30,7 @@ function AdminPage({
 
   const [assignVideoId, setAssignVideoId] = useState<string | null>(null);
   const [assignQuery, setAssignQuery] = useState("");
+  const [showAnnotatorOptions, setShowAnnotatorOptions] = useState(false);
   const [assignAnnotatorId, setAssignAnnotatorId] = useState<string | null>(null);
   const [assignUsers, setAssignUsers] = useState<AssignableUser[] | null>(null);
   const [assignUsersError, setAssignUsersError] = useState("");
@@ -118,12 +119,10 @@ function AdminPage({
   }, [assignVideoId]);
 
   const searchTerm = assignQuery.trim().toLowerCase();
-  const matchingAnnotators = searchTerm
-    ? assignUsers?.filter((user) =>
-        user.full_name.toLowerCase().includes(searchTerm) ||
-        user.email.toLowerCase().includes(searchTerm)
-      ).slice(0, 8) ?? []
-    : [];
+  const matchingAnnotators = assignUsers?.filter((user) =>
+    user.full_name.toLowerCase().includes(searchTerm) ||
+    user.email.toLowerCase().includes(searchTerm)
+  ) ?? [];
   const selectedAnnotator = assignUsers?.find((user) => user.id === assignAnnotatorId);
 
   const deleteVideo = useCallback(
@@ -177,6 +176,7 @@ function AdminPage({
   const closeAssignModal = () => {
     setAssignVideoId(null);
     setAssignQuery("");
+    setShowAnnotatorOptions(false);
     setAssignAnnotatorId(null);
     setAssignError("");
     setAssignMessage("");
@@ -224,6 +224,7 @@ function AdminPage({
 
       setAssignMessage("Video assigned successfully.");
       setAssignQuery("");
+      setShowAnnotatorOptions(false);
       setAssignAnnotatorId(null);
     } catch (err) {
       console.error("Assignment request failed:", err);
@@ -364,46 +365,60 @@ function AdminPage({
                 Find annotator
               </label>
 
-              <input
-                id="annotator-email"
-                type="search"
-                value={assignQuery}
-                onChange={(event) => {
-                  setAssignQuery(event.target.value);
-                  setAssignAnnotatorId(null);
-                  setAssignMessage("");
+              <div
+                className="annotator-picker"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setShowAnnotatorOptions(false);
+                  }
                 }}
-                placeholder="Name or email"
-                autoComplete="off"
-              />
+              >
+                <input
+                  id="annotator-email"
+                  type="search"
+                  value={assignQuery}
+                  onFocus={() => setShowAnnotatorOptions(true)}
+                  onChange={(event) => {
+                    setAssignQuery(event.target.value);
+                    setAssignAnnotatorId(null);
+                    setAssignMessage("");
+                    setShowAnnotatorOptions(true);
+                  }}
+                  placeholder="Name or email"
+                  autoComplete="off"
+                />
 
-              {assignUsersError && <p role="alert" className="admin-error">{assignUsersError}</p>}
-              {!assignUsers && !assignUsersError && <p>Loading annotators…</p>}
-              {assignUsers && assignUsers.length === 0 && <p>No active annotators are available.</p>}
-              {assignUsers && !searchTerm && !selectedAnnotator && assignUsers.length > 0 && (
-                <p>Type a name or email to find someone to assign.</p>
-              )}
-              {assignUsers && searchTerm && !selectedAnnotator && assignUsers.length > 0 && (
-                matchingAnnotators.length > 0 ? (
-                  <div>
-                    <p className="annotator-search-heading">Search results — select an annotator:</p>
-                    <ul className="annotator-suggestions" aria-label="Search results">
-                      {matchingAnnotators.map((user) => (
-                        <li key={user.id}>
-                          <button type="button" onClick={() => {
-                            setAssignAnnotatorId(user.id);
-                            setAssignQuery(user.email);
-                            setAssignError("");
-                          }}>
-                            <strong>{user.full_name}</strong>
-                            <span>{user.email}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : <p>No matching annotators.</p>
-              )}
+                {assignUsersError && <p role="alert" className="admin-error">{assignUsersError}</p>}
+                {!assignUsers && !assignUsersError && <p>Loading annotators…</p>}
+                {assignUsers && assignUsers.length === 0 && <p>No active annotators are available.</p>}
+                {assignUsers && !showAnnotatorOptions && !selectedAnnotator && assignUsers.length > 0 && (
+                  <p>Click the field to browse available annotators, or type to search.</p>
+                )}
+                {assignUsers && showAnnotatorOptions && !selectedAnnotator && assignUsers.length > 0 && (
+                  matchingAnnotators.length > 0 ? (
+                    <div>
+                      <p className="annotator-search-heading">
+                        {searchTerm ? "Search results" : "Available annotators"} — select one to assign:
+                      </p>
+                      <ul className="annotator-suggestions" aria-label={searchTerm ? "Search results" : "Available annotators"}>
+                        {matchingAnnotators.map((user) => (
+                          <li key={user.id}>
+                            <button type="button" onClick={() => {
+                              setAssignAnnotatorId(user.id);
+                              setAssignQuery(user.email);
+                              setShowAnnotatorOptions(false);
+                              setAssignError("");
+                            }}>
+                              <strong>{user.full_name}</strong>
+                              <span>{user.email}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : <p>No matching annotators.</p>
+                )}
+              </div>
               {selectedAnnotator && <p className="selected-annotator">Selected: {selectedAnnotator.full_name} ({selectedAnnotator.email})</p>}
 
               {assignError && (

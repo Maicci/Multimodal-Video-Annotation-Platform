@@ -67,9 +67,14 @@ test('administrator approves and assigns a video that the annotator can annotate
     await expect(videoRow).toBeVisible();
     await expect(videoRow.locator('.video-status')).toHaveText('COMPLETED', { timeout: 120_000 });
     await videoRow.getByRole('button', { name: 'Assign' }).click();
-    await expect(page.getByText('Type a name or email to find someone to assign.')).toBeVisible();
+    await expect(page.getByText('Click the field to browse available annotators, or type to search.')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Search results' })).toHaveCount(0);
     const annotatorSearch = page.getByLabel('Find annotator');
+    await annotatorSearch.click();
+    await expect(page.getByRole('list', { name: 'Available annotators' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Available annotators' })).toContainText(email);
+    await page.getByRole('heading', { name: 'Assign video' }).click();
+    await expect(page.getByRole('list', { name: 'Available annotators' })).toHaveCount(0);
     await annotatorSearch.fill('no-such-annotator@example.com');
     await expect(page.getByText('No matching annotators.')).toBeVisible();
     await expect(page.locator('.modal-backdrop').getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
