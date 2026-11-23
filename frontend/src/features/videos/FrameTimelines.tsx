@@ -6,6 +6,7 @@ type DragTarget = "scrub" | "start" | "end";
 
 type Props = {
   videoId: string;
+  mediaToken: string;
   currentTime: number;
   duration: number;
   selection: Selection | null;
@@ -17,7 +18,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 const THUMBNAIL_COUNT = 12;
 
 function FrameTimeline({
-  videoId, currentTime, duration, selection, onTimeChange, onSelectionChange,
+  videoId, mediaToken, currentTime, duration, selection, onTimeChange, onSelectionChange,
 }: Props) {
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const dragTarget = useRef<DragTarget | null>(null);
@@ -98,10 +99,10 @@ function FrameTimeline({
       onPointerCancel={stopDragging}
     >
       <div className="thumbnail-strip">
-        {duration > 0 && Array.from({ length: THUMBNAIL_COUNT }, (_, index) => (
+        {duration > 0 && mediaToken && Array.from({ length: THUMBNAIL_COUNT }, (_, index) => (
           <img
             key={index + 1}
-            src={`${API_URL}/api/videos/${videoId}/thumbnails/${index + 1}`}
+            src={`${API_URL}/api/videos/${videoId}/thumbnails/${index + 1}?media_token=${encodeURIComponent(mediaToken)}`}
             alt=""
             draggable={false}
           />

@@ -11,7 +11,7 @@ SELECT v.id            AS video_id,
        v.protocol_group,
        CASE
            WHEN a.status = 'completed' THEN 'completed'
-           WHEN s.n > 0               THEN 'in_progress'
+           WHEN s.n > 0 OR EXISTS (SELECT 1 FROM video_summaries vs WHERE vs.video_id = a.video_id AND vs.author_id = a.user_id AND trim(vs.summary) <> '') THEN 'in_progress'
            ELSE 'not_started'
        END             AS status,
        a.assigned_at,

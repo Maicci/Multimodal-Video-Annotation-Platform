@@ -14,7 +14,8 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
   try {
     execFileSync('ffmpeg', [
       '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=10',
-      '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=16000',
+      '-t', '3', '-c:a', 'aac', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
       '-movflags', '+faststart', '-y', localVideo,
     ]);
 
@@ -71,6 +72,9 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
         (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0),
     )).toBe(true);
 
+    await expect(page.getByRole('img', { name: 'Waveform with segment selection and playback position' })).toBeVisible();
+    await page.getByLabel('Seek audio waveform').fill('1');
+    await expect.poll(() => page.locator('video').evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeCloseTo(1, 1);
     await page.getByRole('button', { name: '+ New segment' }).click();
     await page.getByLabel('Title').fill('Opening scene');
     await page.getByLabel('Video description').fill('A test pattern appears.');
@@ -110,7 +114,15 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
     await expect(page.getByLabel('Start (seconds)')).toHaveValue(String(startTime));
 
     await page.getByLabel('Title').fill('Edited opening');
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await page.getByRole('button', { name: '+ New segment' }).click();
+    await expect(page.getByLabel('Title')).toHaveValue('Edited opening');
+    await page.route('**/api/videos/*/segments/*', async (route) => {
+      if (route.request().method() === 'PUT') await new Promise((resolve) => setTimeout(resolve, 500));
+      await route.continue();
+    }, { times: 1 });
     await page.getByRole('button', { name: 'Save segment' }).click();
+    await expect(page.getByLabel('Title')).toBeDisabled();
     await expect(page.getByRole('status')).toHaveText('Segment saved.');
     await page.reload();
     await page.getByRole('row').filter({ hasText: filename }).getByRole('button', { name: 'View' }).click();

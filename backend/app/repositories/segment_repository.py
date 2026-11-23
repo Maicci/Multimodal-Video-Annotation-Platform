@@ -14,7 +14,7 @@ def list_segments(
     return connection.execute(
         """
         SELECT id, video_id, author_id, title, start_time, end_time,
-               description, audio_description
+               description, audio_description, version, start_frame, end_frame
         FROM segments
         WHERE video_id = %s AND author_id = %s
         ORDER BY start_time, created_at
@@ -28,21 +28,24 @@ def create_segment(
     payload: SegmentInput,
 ) -> dict[str, Any]:
     with connection:
-        return connection.execute(
+        row = connection.execute(
             """
             INSERT INTO segments (
                 id, video_id, author_id, title, start_time, end_time,
-                description, audio_description
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                description, audio_description, start_frame, end_frame
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, video_id, author_id, title, start_time, end_time,
-                      description, audio_description
+                      description, audio_description, version, start_frame, end_frame
             """,
             (
                 str(uuid4()), video_id, author_id, payload.title,
                 payload.start_time, payload.end_time, payload.description,
-                payload.audio_description,
+                payload.audio_description, payload.start_frame, payload.end_frame,
             ),
         ).fetchone()
+        if row:
+            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+        return row
 
 
 def update_segment(
@@ -50,35 +53,40 @@ def update_segment(
     author_id: str, payload: SegmentInput,
 ) -> dict[str, Any] | None:
     with connection:
-        return connection.execute(
+        row = connection.execute(
             """
             UPDATE segments
             SET title = %s, start_time = %s, end_time = %s,
-                description = %s, audio_description = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND video_id = %s AND author_id = %s
+                description = %s, audio_description = %s, start_frame = %s, end_frame = %s,
+                updated_at = CURRENT_TIMESTAMP, version = version + 1
+            WHERE id = %s AND video_id = %s AND author_id = %s AND version = %s
             RETURNING id, video_id, author_id, title, start_time, end_time,
-                      description, audio_description
+                      description, audio_description, version, start_frame, end_frame
             """,
             (
                 payload.title, payload.start_time, payload.end_time,
-                payload.description, payload.audio_description,
-                segment_id, video_id, author_id,
+                payload.description, payload.audio_description, payload.start_frame, payload.end_frame,
+                segment_id, video_id, author_id, payload.version,
             ),
         ).fetchone()
+        if row:
+            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+        return row
 
 
 def delete_segment(
     connection: psycopg.Connection[Any], segment_id: str, video_id: str,
-    author_id: str,
+    author_id: str, version: int,
 ) -> bool:
     with connection:
         row = connection.execute(
             """
             DELETE FROM segments
-            WHERE id = %s AND video_id = %s AND author_id = %s
+            WHERE id = %s AND video_id = %s AND author_id = %s AND version = %s
             RETURNING id
             """,
-            (segment_id, video_id, author_id),
+            (segment_id, video_id, author_id, version),
         ).fetchone()
+        if row:
+            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL WHERE video_id = %s AND user_id = %s", (video_id, author_id))
     return row is not None

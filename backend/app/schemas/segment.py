@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SegmentInput(BaseModel):
+    start_frame: int | None = Field(default=None, ge=0)
+    end_frame: int | None = Field(default=None, ge=1)
+    version: int = Field(default=1, ge=1)
     title: str = Field(min_length=1, max_length=120)
     start_time: float = Field(ge=0, allow_inf_nan=False)
     end_time: float = Field(gt=0, allow_inf_nan=False)

@@ -6,10 +6,11 @@ from app.db.models.video import Video
 from app.api.dependencies import Connection
 from app.services.frame_timing import FrameTimeline
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.api.video_access import media_user
 from fastapi.responses import FileResponse
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(media_user)])
 
 def _timeline_path(video: Video) -> Path:
     return Path(video.storage_path).parent.parent / "timelines" / f"{Path(video.stored_filename).stem}.npy"
@@ -67,6 +68,7 @@ def get_timeline(video_id: str, connection: Connection):
     return {
         "frame_count": timeline.frame_count,
         "duration": timeline.end_time,
+        "boundaries": [*timeline.timestamps.tolist(), timeline.end_time],
     }
 
 # Route to get the frame number for a given time
@@ -155,3 +157,15 @@ def get_thumbnail(
         path=thumbnail_path,
         media_type="image/jpeg",
     )
+
+
+@router.get("/videos/{video_id}/waveform")
+def waveform(video_id: str, connection: Connection):
+    from app.services.waveform import load_waveform
+    video = find_video_by_id(connection, video_id)
+    if video is None:
+        raise HTTPException(404, "Video not found")
+    try:
+        return load_waveform(video.storage_path)
+    except Exception:
+        raise HTTPException(503, "Waveform processing failed. Try again after processing completes.")
