@@ -60,7 +60,7 @@ def list_all_videos(
     jobs = {}
     if user["role"] == "administrator":
         jobs = {str(row["video_id"]): row for row in connection.execute(
-            "SELECT DISTINCT ON (video_id) video_id, status, error FROM processing_jobs ORDER BY video_id, created_at DESC"
+            "SELECT DISTINCT ON (video_id) id, video_id, status, error FROM processing_jobs ORDER BY video_id, created_at DESC, id DESC"
         ).fetchall()}
     return [
         VideoListItem(
@@ -73,6 +73,7 @@ def list_all_videos(
             processing_error=v.processing_error if user["role"] == "administrator" else None,
             transcription_status=jobs.get(v.id, {}).get("status"),
             transcription_error=jobs.get(v.id, {}).get("error"),
+            transcription_job_id=jobs.get(v.id, {}).get("id"),
         )
         for v in videos
     ]

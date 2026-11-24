@@ -71,7 +71,7 @@ function App() {
     );
   }
 // admin page
-  return <AdminPage onView={setVideoId} onSignOut={signOut} />;
+  return <AdminPage onView={setVideoId} onSignOut={signOut} canManageProcessing={role === "administrator"} />;
 }
 
 export default App;

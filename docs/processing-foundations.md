@@ -11,12 +11,22 @@ from video readiness. A failed transcript does not block annotation. Starting
 again creates a new attempt; an active attempt prevents duplicate jobs and video
 deletion. Successful job results remain in PostgreSQL across restarts.
 
+When the latest transcription completes, **View transcript** opens the saved
+text beside a video preview. Click a timestamp to seek and play that passage,
+then compare what you hear with the generated words. The viewer shows the model
+and detected language, and explicitly reports when no speech was recognized.
+Use **Close** or Escape to return to the video list. The viewer and processing
+controls are available only to administrators; reviewers and annotators cannot
+retrieve these results through the API either.
+
 API:
 
 - `POST /api/videos/{video_id}/transcription`: administrator only; returns 202
   with the new queued job. Returns 409 for active jobs or videos not yet ready.
 - `GET /api/processing/jobs/{job_id}`: administrator only; includes state,
   model, timestamps, error, and the automatic result when complete.
+- `GET /api/videos`: includes the latest `transcription_job_id`, status and
+  error for administrators. These fields are null for other roles.
 
 Annotators cannot start jobs or retrieve automatic transcripts. Transcript text
 is not rendered in the annotation workspace.
@@ -40,6 +50,9 @@ uploads the resulting video, starts transcription through the API, and checks
 for recognized words. It uses an isolated test database schema. The normal
 suite tests job transitions, persistence, access rules, duplicate prevention,
 failure visibility, and retry/restart handling without downloading a model.
+The Playwright transcript-viewer test uses a controlled transcript response
+with a real uploaded video to check playback, timestamps, closing, empty/error
+states, and hidden controls for other roles. It does not measure Whisper accuracy.
 
 ## Prototype limits
 

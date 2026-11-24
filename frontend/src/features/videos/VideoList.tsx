@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TranscriptViewer from "./TranscriptViewer";
 
 export type VideoItem = {
   id: string;
@@ -10,6 +11,7 @@ export type VideoItem = {
   processing_error?: string | null;
   transcription_status?: string | null;
   transcription_error?: string | null;
+  transcription_job_id?: string | null;
 };
 
 type Props = {
@@ -17,9 +19,11 @@ type Props = {
   onDelete: (video: VideoItem) => void;
   onView: (id: string) => void;
   onAssign: (id: string) => void;
+  canManageProcessing: boolean;
 };
 
-function VideoList({ videos, onDelete, onView, onAssign }: Props) {
+function VideoList({ videos, onDelete, onView, onAssign, canManageProcessing }: Props) {
+  const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
   const [jobMessage, setJobMessage] = useState("");
   const [starting, setStarting] = useState<string | null>(null);
   async function transcribe(videoId: string) {
@@ -92,15 +96,21 @@ function VideoList({ videos, onDelete, onView, onAssign }: Props) {
                   >
                     Delete
                   </button>
-                  <button type="button" onClick={() => void transcribe(v.id)} disabled={starting !== null || v.status !== "COMPLETED" || ["QUEUED", "RUNNING"].includes(v.transcription_status || "")}>
+                  {canManageProcessing && <button type="button" onClick={() => void transcribe(v.id)} disabled={starting !== null || v.status !== "COMPLETED" || ["QUEUED", "RUNNING"].includes(v.transcription_status || "")}>
                     {starting === v.id ? "Starting…" : "Transcribe audio"}
-                  </button>
+                  </button>}
+                  {canManageProcessing && v.transcription_status === "COMPLETED" && v.transcription_job_id && (
+                    <button type="button" className="view-button" onClick={() => setTranscriptVideo(v)}>View transcript</button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {canManageProcessing && transcriptVideo?.transcription_job_id && (
+        <TranscriptViewer video={transcriptVideo} jobId={transcriptVideo.transcription_job_id} onClose={() => setTranscriptVideo(null)} />
+      )}
     </section>
   );
 }

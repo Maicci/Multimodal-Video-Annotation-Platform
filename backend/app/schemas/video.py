@@ -24,3 +24,4 @@ class VideoListItem(BaseModel):
     processing_error: str | None = None
     transcription_status: str | None = None
     transcription_error: str | None = None
+    transcription_job_id: UUID | None = None

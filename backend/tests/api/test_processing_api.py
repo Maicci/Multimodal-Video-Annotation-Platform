@@ -29,7 +29,8 @@ def setup(test_database_url, tmp_path: Path, monkeypatch):
         yield client, headers, video["id"], Database(test_database_url)
 
 
-def test_transcription_persists_results_and_hides_them_from_annotators(setup, monkeypatch):
+@pytest.mark.parametrize("role", ["annotator", "reviewer"])
+def test_transcription_persists_results_and_hides_them_from_other_roles(setup, monkeypatch, role):
     client, headers, video_id, database = setup
     monkeypatch.setattr("app.services.transcription.transcribe", Mock(return_value={"segments": [{"text": "test transcript", "start_seconds": 0, "end_seconds": 1}]}))
     response = client.post(f"/api/videos/{video_id}/transcription", headers=headers)
@@ -40,12 +41,24 @@ def test_transcription_persists_results_and_hides_them_from_annotators(setup, mo
     assert job["status"] == "COMPLETED"
     assert job["result"]["segments"][0]["text"] == "test transcript"
     assert job["started_at"] and job["finished_at"]
+    video = client.get("/api/videos", headers=headers).json()[0]
+    assert video["transcription_job_id"] == response.json()["id"]
+    assert video["transcription_status"] == "COMPLETED"
     assert client.get(job_url).status_code == 401
-    client.post("/api/users", headers=headers, json={"email": "annotator@example.com", "full_name": "Annotator", "password": "test-password-123", "role": "annotator"})
-    token = client.post("/api/auth/login", json={"email": "annotator@example.com", "password": "test-password-123"}).json()["access_token"]
-    annotator = {"Authorization": f"Bearer {token}"}
-    assert client.get(job_url, headers=annotator).status_code == 403
-    assert client.post(f"/api/videos/{video_id}/transcription", headers=annotator).status_code == 403
+    created = client.post("/api/users", headers=headers, json={"email": f"{role}@example.com", "full_name": role, "password": "test-password-123", "role": role})
+    assert created.status_code == 201
+    if role == "annotator":
+        assigned = client.post("/api/assignments", headers=headers, json={"video_id": video_id, "annotator_id": created.json()["id"]})
+        assert assigned.is_success
+    token = client.post("/api/auth/login", json={"email": f"{role}@example.com", "password": "test-password-123"}).json()["access_token"]
+    other_user = {"Authorization": f"Bearer {token}"}
+    assert client.get(job_url, headers=other_user).status_code == 403
+    assert client.post(f"/api/videos/{video_id}/transcription", headers=other_user).status_code == 403
+    visible_video = client.get("/api/videos", headers=other_user).json()[0]
+    assert visible_video["id"] == video_id
+    assert visible_video["transcription_job_id"] is None
+    assert visible_video["transcription_status"] is None
+    assert visible_video["transcription_error"] is None
     recover_interrupted_jobs(database)
     assert client.get(job_url, headers=headers).json()["status"] == "COMPLETED"
 
@@ -61,7 +74,10 @@ def test_failed_jobs_are_visible_and_retryable(setup, monkeypatch):
     assert video["status"] == "COMPLETED"
     assert video["transcription_status"] == "FAILED"
     assert "Model could not load" in video["transcription_error"]
-    assert client.post(f"/api/videos/{video_id}/transcription", headers=headers).status_code == 202
+    retried = client.post(f"/api/videos/{video_id}/transcription", headers=headers)
+    assert retried.status_code == 202
+    assert retried.json()["id"] != response.json()["id"]
+    assert client.get("/api/videos", headers=headers).json()[0]["transcription_job_id"] == retried.json()["id"]
 
 
 def test_duplicate_jobs_and_restart_recovery(setup, monkeypatch):
