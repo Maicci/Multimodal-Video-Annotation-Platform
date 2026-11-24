@@ -20,3 +20,8 @@ class VideoListItem(BaseModel):
     status: str
     uploaded_at: str
     duration: float | None = None
+
+    processing_error: str | None = None
+    transcription_status: str | None = None
+    transcription_error: str | None = None
+    transcription_job_id: UUID | None = None

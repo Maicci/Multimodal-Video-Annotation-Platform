@@ -159,3 +159,21 @@ class Database:
                 )
                 """
             )
+
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS processing_error TEXT")
+            connection.execute("UPDATE videos SET processing_status = 'QUEUED' WHERE processing_status = 'PENDING'")
+            connection.execute("UPDATE videos SET processing_status = 'RUNNING' WHERE processing_status = 'PROCESSING'")
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS processing_jobs (
+                    id UUID PRIMARY KEY,
+                    video_id UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL CHECK (status IN ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED')),
+                    model TEXT NOT NULL,
+                    error TEXT,
+                    result JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMPTZ,
+                    finished_at TIMESTAMPTZ
+                )
+            """)
+            connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_active_transcription ON processing_jobs(video_id) WHERE status IN ('QUEUED', 'RUNNING')")

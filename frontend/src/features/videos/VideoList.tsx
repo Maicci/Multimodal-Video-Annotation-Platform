@@ -1,3 +1,6 @@
+import { useState } from "react";
+import TranscriptViewer from "./TranscriptViewer";
+
 export type VideoItem = {
   id: string;
   filename: string;
@@ -5,6 +8,10 @@ export type VideoItem = {
   status: string;
   uploaded_at: string;
   duration: number | null;
+  processing_error?: string | null;
+  transcription_status?: string | null;
+  transcription_error?: string | null;
+  transcription_job_id?: string | null;
 };
 
 type Props = {
@@ -12,12 +19,30 @@ type Props = {
   onDelete: (video: VideoItem) => void;
   onView: (id: string) => void;
   onAssign: (id: string) => void;
+  canManageProcessing: boolean;
 };
 
-function VideoList({ videos, onDelete, onView, onAssign }: Props) {
+function VideoList({ videos, onDelete, onView, onAssign, canManageProcessing }: Props) {
+  const [transcriptVideo, setTranscriptVideo] = useState<VideoItem | null>(null);
+  const [jobMessage, setJobMessage] = useState("");
+  const [starting, setStarting] = useState<string | null>(null);
+  async function transcribe(videoId: string) {
+    setStarting(videoId);
+    setJobMessage("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/videos/${videoId}/transcription`, {
+        method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not start transcription.");
+      setJobMessage("Transcription queued. Its status will update in the video list.");
+    } catch (cause) { setJobMessage(cause instanceof Error ? cause.message : "Could not start transcription."); }
+    finally { setStarting(null); }
+  }
   return (
     <section className="video-list">
       <h2>Video list</h2>
+      {jobMessage && <p>{jobMessage}</p>}
 
       <div className="video-table-wrapper">
         <table className="video-table">
@@ -46,6 +71,9 @@ function VideoList({ videos, onDelete, onView, onAssign }: Props) {
                   <span className={`video-status ${v.status.toLowerCase()}`}>
                     {v.status}
                   </span>
+                  {v.processing_error && <p>{v.processing_error}</p>}
+                  {v.transcription_status && <p>Transcription: {v.transcription_status}</p>}
+                  {v.transcription_error && <p>{v.transcription_error}</p>}
                 </td>
                 <td>{new Date(v.uploaded_at).toLocaleString()}</td>
                 <td>—</td>
@@ -68,12 +96,21 @@ function VideoList({ videos, onDelete, onView, onAssign }: Props) {
                   >
                     Delete
                   </button>
+                  {canManageProcessing && <button type="button" onClick={() => void transcribe(v.id)} disabled={starting !== null || v.status !== "COMPLETED" || ["QUEUED", "RUNNING"].includes(v.transcription_status || "")}>
+                    {starting === v.id ? "Starting…" : "Transcribe audio"}
+                  </button>}
+                  {canManageProcessing && v.transcription_status === "COMPLETED" && v.transcription_job_id && (
+                    <button type="button" className="view-button" onClick={() => setTranscriptVideo(v)}>View transcript</button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {canManageProcessing && transcriptVideo?.transcription_job_id && (
+        <TranscriptViewer video={transcriptVideo} jobId={transcriptVideo.transcription_job_id} onClose={() => setTranscriptVideo(null)} />
+      )}
     </section>
   );
 }

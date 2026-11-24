@@ -19,9 +19,11 @@ type AssignableUser = {
 function AdminPage({
   onView,
   onSignOut,
+  canManageProcessing,
 }: {
   onView: (id: string) => void;
   onSignOut: () => void;
+  canManageProcessing: boolean;
 }) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [listError, setListError] = useState("");
@@ -293,6 +295,7 @@ function AdminPage({
           )}
 
           <VideoList
+            canManageProcessing={canManageProcessing}
             videos={videos}
             onDelete={deleteVideo}
             onView={onView}

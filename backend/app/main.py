@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.api.videoplayer import router as videos_router
-from app.api.routes import assignments
+from app.services.transcription import recover_interrupted_jobs
 from app.core.config import Settings
 from app.core.security import hash_password
 from app.db.database import Database
@@ -62,6 +62,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application_settings.validate()
         database.initialize()
         _bootstrap_admin(database, application_settings)
+        recover_interrupted_jobs(database)
         yield
 
     application = FastAPI(

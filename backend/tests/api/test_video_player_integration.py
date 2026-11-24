@@ -92,3 +92,16 @@ def test_upload_processing_playback_and_cleanup(client: TestClient, sample_video
     assert deleted.status_code == 204, deleted.text
     assert client.get("/api/videos", headers=headers).json() == []
     assert client.get(f"{base}/stream").status_code == 404
+
+
+def test_processing_failure_preserves_reason(client, sample_video, monkeypatch):
+    def fail(*args, **kwargs):
+        raise RuntimeError("Thumbnail generation failed")
+    monkeypatch.setattr("app.services.video_processing.generate_thumbnails", fail)
+    token = client.post("/api/auth/login", json={"email": "player-admin@example.com", "password": "initial-admin-password-123"}).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post("/api/videos/upload", headers=headers, files={"upload": ("failure.mp4", sample_video, "video/mp4")})
+    assert response.status_code == 201
+    video = client.get("/api/videos", headers=headers).json()[0]
+    assert video["status"] == "FAILED"
+    assert "Thumbnail generation failed" in video["processing_error"]
