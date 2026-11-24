@@ -461,7 +461,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
             <line x1={currentTime / waveform.duration * 1000} x2={currentTime / waveform.duration * 1000} y1="0" y2="100" stroke="white" strokeWidth="2" vectorEffect="non-scaling-stroke" />
           </svg>
           <small>Waveform height is scaled for visibility. Audio volume is unchanged.</small>
-          <label>Seek audio waveform<input type="range" min="0" max={waveform.duration} step="0.01" value={currentTime} onChange={(event) => handleTimelineChange(Number(event.target.value))} /></label>
+          <label className="waveform-seek">Seek audio waveform<input type="range" min="0" max={waveform.duration} step="0.01" value={currentTime} onChange={(event) => handleTimelineChange(Number(event.target.value))} /></label>
         </>}
       </section>
       <p className="timeline-hint">Drag the blue start bar or orange end bar to set the segment range.</p>
