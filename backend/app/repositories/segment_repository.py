@@ -6,6 +6,7 @@ from uuid import uuid4
 import psycopg
 
 from app.schemas.segment import SegmentInput
+from app.repositories.annotation_workflow import require_editable
 
 
 def list_segments(
@@ -28,6 +29,7 @@ def create_segment(
     payload: SegmentInput,
 ) -> dict[str, Any]:
     with connection:
+        require_editable(connection, video_id, author_id)
         row = connection.execute(
             """
             INSERT INTO segments (
@@ -44,7 +46,7 @@ def create_segment(
             ),
         ).fetchone()
         if row:
-            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+            connection.execute("UPDATE video_assignments SET status = CASE WHEN status = 'returned' THEN status ELSE 'in_progress' END, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
         return row
 
 
@@ -53,6 +55,7 @@ def update_segment(
     author_id: str, payload: SegmentInput,
 ) -> dict[str, Any] | None:
     with connection:
+        require_editable(connection, video_id, author_id)
         row = connection.execute(
             """
             UPDATE segments
@@ -70,7 +73,7 @@ def update_segment(
             ),
         ).fetchone()
         if row:
-            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+            connection.execute("UPDATE video_assignments SET status = CASE WHEN status = 'returned' THEN status ELSE 'in_progress' END, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
         return row
 
 
@@ -79,6 +82,7 @@ def delete_segment(
     author_id: str, version: int,
 ) -> bool:
     with connection:
+        require_editable(connection, video_id, author_id)
         row = connection.execute(
             """
             DELETE FROM segments
@@ -88,5 +92,5 @@ def delete_segment(
             (segment_id, video_id, author_id, version),
         ).fetchone()
         if row:
-            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+            connection.execute("UPDATE video_assignments SET status = CASE WHEN status = 'returned' THEN status ELSE 'in_progress' END, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
     return row is not None

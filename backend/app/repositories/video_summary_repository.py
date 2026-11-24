@@ -3,6 +3,7 @@
 from typing import Any
 
 import psycopg
+from app.repositories.annotation_workflow import require_editable
 
 
 def find_video_summary(
@@ -23,6 +24,7 @@ def save_video_summary(
     summary: str, version: int,
 ) -> dict[str, Any]:
     with connection:
+        require_editable(connection, video_id, author_id)
         row = connection.execute(
             """
             INSERT INTO video_summaries (video_id, author_id, summary)
@@ -37,5 +39,5 @@ def save_video_summary(
         ).fetchone()
 
         if row:
-            connection.execute("UPDATE video_assignments SET status = 'in_progress', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
+            connection.execute("UPDATE video_assignments SET status = CASE WHEN status = 'returned' THEN status ELSE 'in_progress' END, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))
         return row

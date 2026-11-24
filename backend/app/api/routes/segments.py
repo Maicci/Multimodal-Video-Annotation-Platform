@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.dependencies import Connection, CurrentUser
 from app.api.video_access import require_video_access
+from app.repositories.annotation_workflow import lock_assignment, LOCKED_STATES
 from app.repositories.segment_repository import (
     create_segment, delete_segment, list_segments, update_segment,
 )
@@ -30,8 +31,11 @@ def _require_editor(user: CurrentUser) -> None:
 @router.get("", response_model=list[SegmentResponse])
 def get_segments(video_id: UUID, connection: Connection, user: CurrentUser):
     video = require_video_access(connection, video_id, user)
+    assignment = lock_assignment(connection, video_id, user["id"])
     rows = list_segments(connection, str(video_id), str(user["id"]))
     for row in rows:
+        if assignment and assignment["status"] in LOCKED_STATES:
+            break
         if row["start_frame"] is None or row["end_frame"] is None:
             try:
                 normalized = resolve_segment(video, SegmentInput(**row))

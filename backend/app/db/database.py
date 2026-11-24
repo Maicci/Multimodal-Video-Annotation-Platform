@@ -161,6 +161,23 @@ class Database:
             )
 
             connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS processing_error TEXT")
+            connection.execute("ALTER TABLE video_assignments ADD COLUMN IF NOT EXISTS workflow_version INTEGER NOT NULL DEFAULT 0")
+            connection.execute("ALTER TABLE video_assignments DROP CONSTRAINT IF EXISTS video_assignments_status_check")
+            connection.execute("ALTER TABLE video_assignments ADD CONSTRAINT video_assignments_status_check CHECK (status IN ('not_started', 'in_progress', 'completed', 'submitted', 'returned', 'approved', 'skipped'))")
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS annotation_review_events (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    assignment_id UUID NOT NULL REFERENCES video_assignments(id) ON DELETE CASCADE,
+                    version INTEGER NOT NULL,
+                    action TEXT NOT NULL CHECK (action IN ('submitted', 'resubmitted', 'returned', 'approved', 'skipped')),
+                    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                    actor_name TEXT NOT NULL,
+                    comment TEXT NOT NULL DEFAULT '',
+                    snapshot JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (assignment_id, version)
+                )
+            """)
             connection.execute("UPDATE videos SET processing_status = 'QUEUED' WHERE processing_status = 'PENDING'")
             connection.execute("UPDATE videos SET processing_status = 'RUNNING' WHERE processing_status = 'PROCESSING'")
             connection.execute("""

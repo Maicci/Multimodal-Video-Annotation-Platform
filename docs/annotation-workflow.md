@@ -2,7 +2,8 @@
 
 Annotators can list and open assigned videos only. Administrators and reviewers
 can access video media; annotation text endpoints return only the current user's
-records. Reviewing other users' submitted annotations remains separate Sprint 3 work.
+records. The separate [submission and review workflow](review-workflow.md) gives
+reviewers and administrators read-only access to submitted revisions.
 Uploads and video deletion require an administrator.
 
 Browser playback uses `POST /api/videos/{id}/media-token` with bearer authentication.
@@ -22,6 +23,8 @@ assignment status. `POST .../annotation-session/complete` requires at least one
 segment, both descriptions on every segment, and a nonblank whole-video summary.
 For silent segments, describe the absence of audible content. Editing or deleting
 saved work resets completion. Completion is not submission or reviewer approval.
+Submitted and approved work cannot be edited through the annotation APIs.
+Returned work remains returned while edits are saved, until it is resubmitted.
 
 Segment intervals are half-open: start is inclusive, end exclusive. Frame N,
 where N is the frame count, denotes the end of the video. Timestamp edits and

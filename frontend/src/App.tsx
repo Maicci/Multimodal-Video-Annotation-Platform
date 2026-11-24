@@ -3,11 +3,13 @@ import AdminPage from "./pages/AdminPage";
 import AnnotatorHomePage from "./pages/AnnotatorHomePage";
 import LoginPage from "./pages/LoginPage";
 import VideoViewer from "./features/videos/VideoViewer";
+import ReviewPage from "./pages/ReviewPage";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 function App() {
   const [annotationDirty, setAnnotationDirty] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [token, setToken] = useState(() => localStorage.getItem("access_token"));
   const [role, setRole] = useState<string | null>(null);
@@ -46,6 +48,7 @@ function App() {
     setToken(null);
     setRole(null);
     setVideoId(null);
+    setShowReviews(false);
   };
 
   if (checkingToken) return <main><p>Checking sign-in…</p></main>;
@@ -54,6 +57,10 @@ function App() {
     setCheckingToken(true);
     setToken(newToken);
   }} />;
+
+  if (role === "reviewer" || (role === "administrator" && showReviews)) {
+    return <ReviewPage onSignOut={signOut} onBack={role === "administrator" ? () => setShowReviews(false) : undefined} />;
+  }
 
   if (videoId) {
     return (
@@ -71,7 +78,7 @@ function App() {
     );
   }
 // admin page
-  return <AdminPage onView={setVideoId} onSignOut={signOut} canManageProcessing={role === "administrator"} />;
+  return <AdminPage onView={setVideoId} onSignOut={signOut} canManageProcessing={role === "administrator"} onReview={() => setShowReviews(true)} />;
 }
 
 export default App;

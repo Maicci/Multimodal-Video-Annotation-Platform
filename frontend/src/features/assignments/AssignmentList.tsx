@@ -8,11 +8,19 @@ const STATUS_LABEL: Record<AnnotationStatus, string> = {
   not_started: "Not started",
   in_progress: "In progress",
   completed: "Completed",
+  submitted: "Submitted",
+  returned: "Returned for changes",
+  approved: "Approved",
+  skipped: "Skipped",
 };
 const ACTION_LABEL: Record<AnnotationStatus, string> = {
   not_started: "Start",
   in_progress: "Continue",
   completed: "Review",
+  submitted: "View",
+  returned: "Revise",
+  approved: "View",
+  skipped: "Resume",
 };
 const GROUPS = [
   { key: "shared", title: "Shared set", note: "Everyone annotates these independently." },
@@ -71,7 +79,7 @@ export default function AssignmentList({ token, onOpenVideo }: Props) {
     );
   if (!data) return <p className="notice">Loading your videos…</p>;
 
-  const done = data.filter((a) => a.status === "completed").length;
+  const done = data.filter((a) => ["completed", "submitted", "approved"].includes(a.status)).length;
 
   async function fetchMyAssignments(token: string, signal?: AbortSignal): Promise<Assignment[]> {
     const res = await fetch(`${API_URL}/api/me/assignments`, {

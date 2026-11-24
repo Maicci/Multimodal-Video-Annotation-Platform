@@ -1,4 +1,4 @@
-export type AnnotationStatus = "not_started" | "in_progress" | "completed";
+export type AnnotationStatus = "not_started" | "in_progress" | "completed" | "submitted" | "returned" | "approved" | "skipped";
 
 export interface Assignment {
   video_id: string;

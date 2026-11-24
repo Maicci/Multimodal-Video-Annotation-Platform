@@ -105,7 +105,7 @@ test('admin verifies transcript against playback, including empty and failed res
       await route.fulfill({ response, json: { ...await response.json(), role: 'reviewer' } });
     });
     await page.reload();
-    await expect(row).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Annotation reviews', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Transcribe audio' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'View transcript' })).toHaveCount(0);
   } finally {
