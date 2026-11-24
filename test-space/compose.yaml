@@ -72,6 +72,10 @@ services:
       BASE_URL: http://frontend:5173
       TEST_ADMIN_EMAIL: admin@example.com
       TEST_ADMIN_PASSWORD: test-password-123
+      E2E_BROWSER: ${E2E_BROWSER:-chromium}
+      E2E_ARTIFACT_DIR: /artifacts
+    volumes:
+      - ./artifacts:/artifacts
     depends_on:
       frontend:
         condition: service_healthy

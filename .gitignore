@@ -9,3 +9,6 @@ coverage/
 storage/*
 !storage/README.md
 *.egg-info/
+test-space/artifacts/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
