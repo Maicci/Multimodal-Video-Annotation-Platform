@@ -19,8 +19,18 @@ type Segment = SegmentInput & { id: string; video_id: string; author_id: string 
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function frameAtTime(boundaries: number[], time: number) {
+  let low = 0;
+  let high = boundaries.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (boundaries[middle] <= time) low = middle + 1;
+    else high = middle;
+  }
+  return Math.max(0, Math.min(low - 1, boundaries.length - 2));
+}
+
 function VideoViewer({ videoId, onDirtyChange }: Props) {
-  const frameRequest = useRef(0);
   const resumePlayback = useRef(false);
   const playbackPosition = useRef(0);
   const [waveform, setWaveform] = useState<{ duration: number; status: string; peaks: number[] } | null>(null);
@@ -31,7 +41,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
+  const currentFrame = frameAtTime(boundaries, currentTime);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SegmentInput>({
@@ -165,21 +175,28 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [videoId]);
 
-  async function handleTimeUpdate() {
+  // Native timeupdate events can be about 250 ms apart. Follow the media clock
+  // on each paint while playing; retain timeupdate for paused seeks/background tabs.
+  useEffect(() => {
+    if (!isPlaying) return;
+    let animation: number;
+    function updatePlayhead() {
+      const player = videoRef.current;
+      if (player) {
+        setCurrentTime(player.currentTime);
+        playbackPosition.current = player.currentTime;
+      }
+      animation = window.requestAnimationFrame(updatePlayhead);
+    }
+    animation = window.requestAnimationFrame(updatePlayhead);
+    return () => window.cancelAnimationFrame(animation);
+  }, [isPlaying]);
+
+  function handleTimeUpdate() {
     if (!videoRef.current || videoRef.current.readyState < 1) return;
     const time = videoRef.current.currentTime;
     setCurrentTime(time);
     playbackPosition.current = time;
-    const requestId = ++frameRequest.current;
-    try {
-      const response = await fetch(`${API_URL}/api/videos/${videoId}/frame?time=${time}`, { headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` } });
-      if (response.ok) {
-        const data: { frame: number } = await response.json();
-        if (requestId === frameRequest.current) setCurrentFrame(data.frame);
-      }
-    } catch {
-      // Playback remains usable if frame timing is unavailable.
-    }
   }
 
   function handleTimelineChange(time: number) {

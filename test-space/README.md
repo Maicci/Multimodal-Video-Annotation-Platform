@@ -46,7 +46,7 @@ thumbnail timeline to set its start and end. The time inputs stay in sync.
 After rebuilding the backend image, run the segment API test with
 `docker compose -f test-space/compose.yaml exec backend python -m pytest backend/tests/api/test_segments_api.py`.
 Run the frontend type check with
-`docker compose -f test-space/compose.yaml exec frontend npx tsc --noEmit`,
+`docker compose -f test-space/compose.yaml exec frontend npx tsc -b --noEmit`,
 then the production build with
 `docker compose -f test-space/compose.yaml exec frontend npm run build`.
 
@@ -60,3 +60,14 @@ and metadata failures. Run them with
 `docker compose -f test-space/compose.yaml exec backend python -m pytest backend/tests -q`.
 The browser command stops the Compose services when it finishes; restart the app with
 `docker compose -f test-space/compose.yaml up -d` if you want to keep testing.
+
+For an already running app, run the browser tests without stopping its services:
+
+```powershell
+docker compose -f test-space/compose.yaml --profile e2e run --rm --build --no-deps e2e
+```
+
+Reports, screenshots and failure traces are saved under
+`test-space/artifacts/chromium/`. See the [Sprint 2 acceptance report](../docs/sprint2-acceptance.md)
+for the full workflow, synchronization measurements, Firefox command and known
+usability observations.
