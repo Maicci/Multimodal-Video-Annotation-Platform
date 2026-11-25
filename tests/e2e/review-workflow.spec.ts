@@ -132,6 +132,54 @@ test('annotator submits, reviewer returns, annotator resubmits, reviewer approve
     await expect(page.getByLabel('Audio description')).toHaveValue('A steady 440 Hz tone plays.');
     await expect(page.getByLabel('Audio description')).toBeDisabled();
     await expect(page.getByLabel('Video summary')).toBeDisabled();
+
+    // A second author on this video has a returned submission and a newer private draft.
+    const peerName = `Second author ${suffix}`;
+    const peerEmail = `e2e-peer-${suffix}@example.com`;
+    const peerUser = await request.post('/api/users', { headers: adminHeaders, data: {
+      email: peerEmail, role: 'annotator', password, full_name: peerName,
+    } });
+    expect(peerUser.status()).toBe(201);
+    const peerId = (await peerUser.json()).id;
+    users.push(peerId);
+    expect((await request.post('/api/assignments', { headers: adminHeaders, data: { video_id: videoId, annotator_id: peerId } })).ok()).toBe(true);
+    const peerLogin = await request.post('/api/auth/login', { data: { email: peerEmail, password } });
+    const peerHeaders = { Authorization: `Bearer ${(await peerLogin.json()).access_token}` };
+    const base = `/api/videos/${videoId}`;
+    expect((await request.post(`${base}/segments`, { headers: peerHeaders, data: {
+      title: 'Second interval', start_time: 0.5, end_time: 1.5, description: 'Changing bars', audio_description: 'A tone',
+    } })).status()).toBe(201);
+    expect((await request.put(`${base}/summary`, { headers: peerHeaders, data: { summary: 'Submitted peer summary', version: 0 } })).ok()).toBe(true);
+    expect((await request.post(`${base}/annotation-session/submit`, { headers: peerHeaders, data: { expected_version: 0 } })).ok()).toBe(true);
+    const queue = await (await request.get('/api/reviews', { headers: adminHeaders })).json();
+    const peerReview = queue.find((row: { video_id: string; author_id: string }) => row.video_id === videoId && row.author_id === peerId);
+    expect((await request.post(`/api/reviews/${peerReview.id}/return`, { headers: adminHeaders, data: { expected_version: 1, comment: 'Clarify the summary' } })).ok()).toBe(true);
+    expect((await request.put(`${base}/summary`, { headers: peerHeaders, data: { summary: 'Private peer draft', version: 1 } })).ok()).toBe(true);
+    expect((await request.get('/api/assignments/progress', { headers: peerHeaders })).status()).toBe(403);
+    await reviewerPage.reload();
+    const originalRow = reviewerPage.locator('.review-queue li').filter({ hasText: filename }).filter({ hasText: 'Review test annotator' });
+    await originalRow.getByRole('button', { name: 'View review' }).click();
+    await expect(reviewerPage.getByLabel('Compare with another submission')).toBeVisible();
+    await reviewerPage.getByLabel('Compare with another submission').selectOption(peerReview.id);
+    const peerSnapshot = reviewerPage.getByRole('article', { name: `Submission by ${peerName}`, exact: true });
+    await expect(peerSnapshot).toContainText('Submitted peer summary');
+    await expect(peerSnapshot).toContainText('Changing bars');
+    await expect(peerSnapshot).toContainText('Frames 5–15');
+    await expect(peerSnapshot).not.toContainText('Private peer draft');
+    await expect(reviewerPage.getByRole('article', { name: 'Submission by Review test annotator' })).toContainText('A short pattern and tone.');
+
+    await page.getByRole('button', { name: 'Back to videos' }).click();
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByLabel('Email', { exact: true }).fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
+    await page.getByLabel('Password', { exact: true }).fill(process.env.TEST_ADMIN_PASSWORD || 'test-password-123');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('button', { name: 'Assignment progress' }).click();
+    const videoProgress = page.getByRole('table', { name: 'Progress by video' }).getByRole('row').filter({ hasText: filename });
+    // Assigned, not started, in progress, completed, submitted, returned, approved, skipped.
+    await expect(videoProgress.getByRole('cell')).toHaveText(['2', '0', '0', '0', '0', '1', '1', '0']);
+    await page.getByLabel('Group by').selectOption('annotator');
+    const peerProgress = page.getByRole('table', { name: 'Progress by annotator' }).getByRole('row').filter({ hasText: peerName });
+    await expect(peerProgress.getByRole('cell')).toHaveText(['1', '0', '0', '0', '0', '1', '0', '0']);
     expect(errors).toEqual([]);
   } finally {
     await reviewerContext.close();

@@ -3,8 +3,9 @@ from uuid import UUID
 
 from app.db.database import Database
 
-LIST_FOR_USER = """
-SELECT v.id            AS video_id,
+ASSIGNMENT_PROGRESS = """
+SELECT a.user_id,
+       v.id            AS video_id,
        v.title,
        v.original_filename,
        v.duration_seconds,
@@ -25,8 +26,22 @@ SELECT v.id            AS video_id,
          WHERE sg.video_id = a.video_id
            AND sg.author_id = a.user_id
   ) s
+"""
+
+LIST_FOR_USER = ASSIGNMENT_PROGRESS + """
  WHERE a.user_id = %(user_id)s
  ORDER BY (a.status = 'completed'), v.protocol_group, v.title
+"""
+
+PROGRESS_REPORT = f"""
+WITH assignments AS ({ASSIGNMENT_PROGRESS})
+SELECT 'video' AS dimension, video_id AS id, original_filename AS name, status, count(*) AS total
+FROM assignments GROUP BY video_id, original_filename, status
+UNION ALL
+SELECT 'annotator', a.user_id, u.full_name, a.status, count(*)
+FROM assignments a JOIN users u ON u.id = a.user_id
+GROUP BY a.user_id, u.full_name, a.status
+ORDER BY dimension, name, id, status
 """
 
 CREATE_ASSIGNMENT = """
@@ -51,6 +66,10 @@ class AssignmentRepository:
             return connection.execute(LIST_FOR_USER, {"user_id": user_id}).fetchall()
         
         
+    def progress_report(self) -> list[dict[str, Any]]:
+        with self.database.connect() as connection:
+            return connection.execute(PROGRESS_REPORT).fetchall()
+
     def create(
         self,
         video_id: UUID,

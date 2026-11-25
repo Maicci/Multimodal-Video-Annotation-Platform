@@ -57,6 +57,10 @@
   align-items: center;
 }
 
+.progress-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; }
+.progress-report .video-table th { white-space: normal; }
+.progress-report .video-table thead th { vertical-align: bottom; }
+
 .sign-out-button {
   border: 1px solid #5b6b82;
   background: transparent;

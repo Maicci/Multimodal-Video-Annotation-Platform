@@ -117,5 +117,7 @@ docker compose -f test-space/compose.yaml --profile e2e run --rm --no-deps -e E2
 ```
 
 Review queues update when opened or manually refreshed. Annotators should
-refresh after a reviewer decision. The wider role dashboards (#30), concurrent
-user test programme (#31), and multimodal integration (#32) remain separate work.
+refresh after a reviewer decision. The administrator's **Assignment progress**
+view reports each state by video or annotator. The browser test also checks
+these counts and compares two submitted revisions after one author edits a
+returned draft.

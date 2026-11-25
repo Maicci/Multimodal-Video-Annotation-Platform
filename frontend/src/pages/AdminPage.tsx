@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import VideoUpload from "../features/videos/VideoUpload";
 import VideoList, { type VideoItem } from "../features/videos/VideoList";
 import PendingUsers from "../features/users/PendingUsers";
+import AssignmentProgress from "../features/reporting/AssignmentProgress";
 import "../assets/css/AdminPage.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
@@ -31,6 +32,7 @@ function AdminPage({
   const [listError, setListError] = useState("");
 
   const [showPendingUsers, setShowPendingUsers] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
 
   const [assignVideoId, setAssignVideoId] = useState<string | null>(null);
   const [assignQuery, setAssignQuery] = useState("");
@@ -247,10 +249,14 @@ function AdminPage({
           <button type="button" onClick={onReview}>Annotation reviews</button>
           <button
             type="button"
-            className="active"
+            className={showProgress ? "" : "active"}
+            aria-pressed={!showProgress}
+            onClick={() => setShowProgress(false)}
           >
             Videos
           </button>
+          <button type="button" className={showProgress ? "active" : ""} aria-pressed={showProgress}
+            onClick={() => setShowProgress(true)}>Assignment progress</button>
 
           <button
             type="button"
@@ -272,6 +278,7 @@ function AdminPage({
       </header>
 
       <main className="admin-content">
+        {showProgress ? <AssignmentProgress /> : <>
         <section className="admin-section">
           <div className="section-header">
             <div>
@@ -305,6 +312,7 @@ function AdminPage({
             onAssign={setAssignVideoId}
           />
         </section>
+        </>}
       </main>
 
       {showPendingUsers && (
