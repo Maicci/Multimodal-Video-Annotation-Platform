@@ -12,6 +12,7 @@
 .home-head h1 { font-size: 2rem; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
 .home-head p { margin: 0; color: var(--muted); }
 .group { margin-top: 40px; }
+.assignment-counts { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 18px; list-style: none; padding: 0; margin: 8px 0; }
 .group h2 { font-size: 1.1rem; margin: 0; }
 .group-note { margin: 2px 0 12px; color: var(--muted); font-size: 0.9rem; }
 .list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }

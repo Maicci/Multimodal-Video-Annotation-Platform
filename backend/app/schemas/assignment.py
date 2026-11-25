@@ -22,3 +22,11 @@ class AssignmentOut(BaseModel):
 class AssignmentCreate(BaseModel):
     video_id: UUID
     annotator_id: UUID
+
+
+class ProgressCount(BaseModel):
+    dimension: Literal["video", "annotator"]
+    id: UUID
+    name: str
+    status: AnnotationStatus
+    total: int

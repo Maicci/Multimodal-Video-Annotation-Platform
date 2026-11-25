@@ -8,7 +8,7 @@ from app.api.dependencies import (
 )
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.user_repository import find_user_by_id
-from app.schemas.assignment import AssignmentCreate, AssignmentOut
+from app.schemas.assignment import AssignmentCreate, AssignmentOut, ProgressCount
 from app.schemas.user import Role
 
 router = APIRouter(tags=["assignments"])
@@ -20,6 +20,15 @@ def my_assignments(
     database=Depends(get_database),
 ):
     return AssignmentRepository(database).list_for_user(user["id"])
+
+
+@router.get(
+    "/api/assignments/progress",
+    response_model=list[ProgressCount],
+    dependencies=[Depends(require_roles(Role.ADMINISTRATOR))],
+)
+def assignment_progress(database=Depends(get_database)):
+    return AssignmentRepository(database).progress_report()
 
 
 @router.post(

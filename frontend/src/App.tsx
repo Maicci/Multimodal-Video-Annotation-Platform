@@ -77,8 +77,10 @@ function App() {
       <AnnotatorHomePage token={token} onOpenVideo={setVideoId} onSignOut={signOut} />
     );
   }
-// admin page
-  return <AdminPage onView={setVideoId} onSignOut={signOut} canManageProcessing={role === "administrator"} onReview={() => setShowReviews(true)} />;
+  if (role === "administrator") {
+    return <AdminPage onView={setVideoId} onSignOut={signOut} canManageProcessing onReview={() => setShowReviews(true)} />;
+  }
+  return <main><p>Your account needs an active role to open a dashboard.</p><button onClick={signOut}>Sign out</button></main>;
 }
 
 export default App;

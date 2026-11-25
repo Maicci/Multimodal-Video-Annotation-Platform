@@ -11,3 +11,7 @@
 .review-history { text-align: left; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
 .review-history li { margin: 12px 0; overflow-wrap: anywhere; }
 .review-page textarea { box-sizing: border-box; width: 100%; }
+.snapshot-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.review-snapshot { min-width: 0; margin-top: 16px; overflow-wrap: anywhere; }
+.review-snapshot h4 { margin: 12px 0 4px; }
+@media (max-width: 640px) { .snapshot-comparison { grid-template-columns: 1fr; } }

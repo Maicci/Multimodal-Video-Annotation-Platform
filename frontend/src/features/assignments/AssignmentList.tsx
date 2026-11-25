@@ -1,18 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Assignment, AnnotationStatus } from "../../types/assignment";
+import { STATUS_LABEL, type Assignment, type AnnotationStatus } from "../../types/assignment";
 import "../../assets/css/AssignmentList.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-const STATUS_LABEL: Record<AnnotationStatus, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  completed: "Completed",
-  submitted: "Submitted",
-  returned: "Returned for changes",
-  approved: "Approved",
-  skipped: "Skipped",
-};
 const ACTION_LABEL: Record<AnnotationStatus, string> = {
   not_started: "Start",
   in_progress: "Continue",
@@ -79,7 +70,8 @@ export default function AssignmentList({ token, onOpenVideo }: Props) {
     );
   if (!data) return <p className="notice">Loading your videos…</p>;
 
-  const done = data.filter((a) => ["completed", "submitted", "approved"].includes(a.status)).length;
+  const counts = new Map<AnnotationStatus, number>();
+  for (const { status } of data) counts.set(status, (counts.get(status) ?? 0) + 1);
 
   async function fetchMyAssignments(token: string, signal?: AbortSignal): Promise<Assignment[]> {
     const res = await fetch(`${API_URL}/api/me/assignments`, {
@@ -94,7 +86,10 @@ export default function AssignmentList({ token, onOpenVideo }: Props) {
     <div className="home">
       <header className="home-head">
         <h1>Your videos</h1>
-        <p>{data.length === 0 ? "Nothing is assigned to you yet." : `${done} of ${data.length} completed`}</p>
+        <p>{data.length === 0 ? "Nothing is assigned to you yet." : `${data.length} assigned`}</p>
+        {data.length > 0 && <ul className="assignment-counts" aria-label="Assignment progress">
+          {Array.from(counts, ([status, count]) => <li key={status}>{STATUS_LABEL[status]} ({count})</li>)}
+        </ul>}
       </header>
 
       {data.length === 0 && <p className="notice">Ask an administrator to assign videos to your account.</p>}

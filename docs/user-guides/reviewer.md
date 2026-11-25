@@ -5,6 +5,9 @@
 2. Select **Review submission** beside a submitted assignment.
 3. Read the submitted segment descriptions and whole-video summary. Use the video
    controls or **Play from ...** buttons to compare them with the media.
+   When another annotator has submitted work for the same video, choose them
+   under **Compare with another submission**. Both columns show saved revisions.
+   The review decision applies to the author named above its controls.
 4. Choose **Approve annotation**, or enter a comment and choose **Return for changes**.
    A return comment is required so the annotator knows what to fix.
 5. Return to the queue. After the annotator resubmits, open the submission again
