@@ -10,6 +10,7 @@ type Props = {
   currentTime: number;
   duration: number;
   selection: Selection | null;
+  selectionEditable?: boolean;
   onTimeChange: (time: number) => void;
   onSelectionChange: (start: number, end: number) => void;
 };
@@ -18,7 +19,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 const THUMBNAIL_COUNT = 12;
 
 function FrameTimeline({
-  videoId, mediaToken, currentTime, duration, selection, onTimeChange, onSelectionChange,
+  videoId, mediaToken, currentTime, duration, selection, selectionEditable = true, onTimeChange, onSelectionChange,
 }: Props) {
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const dragTarget = useRef<DragTarget | null>(null);
@@ -114,7 +115,7 @@ function FrameTimeline({
             className="timeline-selection"
             style={{ left: `${position(visibleSelection.start)}%`, width: `${position(visibleSelection.end) - position(visibleSelection.start)}%` }}
           />
-          <button
+          {selectionEditable && <button
             type="button"
             className="selection-handle start-handle"
             data-handle="start"
@@ -122,8 +123,8 @@ function FrameTimeline({
             aria-label={`Segment start ${visibleSelection.start.toFixed(2)} seconds. Drag or use arrow keys.`}
             onKeyDown={(event) => handleBoundaryKey(event, "start")}
             title="Drag to set segment start"
-          >S</button>
-          <button
+          >S</button>}
+          {selectionEditable && <button
             type="button"
             className="selection-handle end-handle"
             data-handle="end"
@@ -131,7 +132,7 @@ function FrameTimeline({
             aria-label={`Segment end ${visibleSelection.end.toFixed(2)} seconds. Drag or use arrow keys.`}
             onKeyDown={(event) => handleBoundaryKey(event, "end")}
             title="Drag to set segment end"
-          >E</button>
+          >E</button>}
         </>
       )}
       <div className="timeline-playhead" style={{ left: `${position(currentTime)}%` }} />

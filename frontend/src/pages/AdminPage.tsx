@@ -20,10 +20,12 @@ function AdminPage({
   onView,
   onSignOut,
   canManageProcessing,
+  onReview,
 }: {
   onView: (id: string) => void;
   onSignOut: () => void;
   canManageProcessing: boolean;
+  onReview: () => void;
 }) {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [listError, setListError] = useState("");
@@ -242,6 +244,7 @@ function AdminPage({
         <div className="admin-logo">Video Annotation</div>
 
         <nav className="admin-nav">
+          <button type="button" onClick={onReview}>Annotation reviews</button>
           <button
             type="button"
             className="active"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "../../assets/css/VideoViewer.css";
 import FrameTimeline from "./FrameTimelines";
+import ReviewHistory, { type ReviewEvent } from "./ReviewHistory";
 
 type Props = { videoId: string; onDirtyChange: (dirty: boolean) => void };
 
@@ -48,6 +49,13 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
     title: "", start_time: 0, end_time: 0, description: "", audio_description: "",
   });
   const [sessionStatus, setSessionStatus] = useState("unassigned");
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [workflowVersion, setWorkflowVersion] = useState(0);
+  const [reviewHistory, setReviewHistory] = useState<ReviewEvent[]>([]);
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [workflowMessage, setWorkflowMessage] = useState("");
+  const [skipReason, setSkipReason] = useState("");
+  const readOnly = !sessionLoaded || ["submitted", "approved"].includes(sessionStatus);
   const [completionMessage, setCompletionMessage] = useState("");
   const [dirty, setDirty] = useState(false);
   const [savedSummary, setSavedSummary] = useState("");
@@ -77,6 +85,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
   }
 
   function updateDraft(patch: Partial<SegmentInput>) {
+    if (readOnly || workflowBusy) return;
     if (boundaries.length) {
       if (patch.start_time !== undefined) { patch.start_frame = nearestFrame(patch.start_time); patch.start_time = boundaries[patch.start_frame]; }
       if (patch.end_time !== undefined) { patch.end_frame = nearestFrame(patch.end_time); patch.end_time = boundaries[patch.end_frame]; }
@@ -244,6 +253,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
   }
 
   async function saveSegment() {
+    if (readOnly || workflowBusy) return;
     const payload = { ...draft, title: draft.title.trim() };
     if (!payload.title || payload.start_time < 0 ||
         payload.end_time <= payload.start_time || payload.end_time > duration) {
@@ -280,7 +290,8 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
       setSelectedId(saved.id);
       setDraft(saved);
       setDirty(false);
-      if (sessionStatus !== "unassigned") setSessionStatus("in_progress");
+      if (sessionStatus !== "unassigned" && sessionStatus !== "returned") setSessionStatus("in_progress");
+      setCompletionMessage("");
       setMessage("Segment saved.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save segment.");
@@ -290,6 +301,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
   }
 
   async function deleteSelectedSegment() {
+    if (readOnly || workflowBusy) return;
     if (!selectedId || !window.confirm(`Delete segment "${draft.title}"?`)) return;
     const token = localStorage.getItem("access_token");
     if (!token) {
@@ -306,7 +318,8 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
       );
       if (!response.ok) throw new Error(response.status === 409 ? "This segment changed in another session. Reload before deleting." : `Could not delete segment (${response.status}).`);
       setDirty(false);
-      if (sessionStatus !== "unassigned") setSessionStatus("in_progress");
+      if (sessionStatus !== "unassigned" && sessionStatus !== "returned") setSessionStatus("in_progress");
+      setCompletionMessage("");
       const remaining = segments.filter((item) => item.id !== selectedId);
       setSegments(remaining);
       if (remaining.length > 0) {
@@ -326,11 +339,21 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
     const controller = new AbortController();
     fetch(`${API_URL}/api/videos/${videoId}/annotation-session`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` }, signal: controller.signal,
-    }).then(async (response) => { if (response.ok) setSessionStatus((await response.json()).status); }).catch(() => {});
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Could not load annotation status. Refresh before editing.");
+      const data = await response.json();
+      if (controller.signal.aborted) return;
+      setSessionStatus(data.status);
+      setWorkflowVersion(data.workflow_version);
+      setReviewHistory(data.review_history);
+      setSessionLoaded(true);
+    }).catch((cause) => { if (!controller.signal.aborted) setError(cause.message); });
     return () => controller.abort();
   }, [videoId]);
 
   async function completeAnnotation() {
+    if (readOnly || workflowBusy) return;
+    setWorkflowBusy(true);
     try {
       const response = await fetch(`${API_URL}/api/videos/${videoId}/annotation-session/complete`, {
         method: "POST", headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
@@ -340,9 +363,11 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
       setSessionStatus("completed");
       setCompletionMessage("Annotation completed.");
     } catch (cause) { setCompletionMessage(cause instanceof Error ? cause.message : "Could not complete annotation."); }
+    finally { setWorkflowBusy(false); }
   }
 
   async function saveSummary() {
+    if (readOnly || workflowBusy) return;
     const token = localStorage.getItem("access_token");
     if (!token) {
       setSummaryStatus("Sign in again to save the summary.");
@@ -365,13 +390,36 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
       const saved = await response.json();
       setSummaryVersion(saved.version);
       setSavedSummary(saved.summary);
-      if (sessionStatus !== "unassigned") setSessionStatus("in_progress");
+      if (sessionStatus !== "unassigned" && sessionStatus !== "returned") setSessionStatus("in_progress");
+      setCompletionMessage("");
       setSummaryStatus("Summary saved.");
     } catch (cause) {
       setSummaryStatus(cause instanceof Error ? cause.message : "Could not save summary.");
     } finally {
       setSummarySaving(false);
     }
+  }
+
+  async function workflowAction(action: "submit" | "resubmit" | "skip") {
+    if (dirty || summary !== savedSummary || saving || summarySaving || deleting || workflowBusy) return;
+    if (action !== "skip" && !window.confirm("Submit this saved annotation for review? Editing will be locked until a reviewer returns it.")) return;
+    setWorkflowBusy(true);
+    setWorkflowMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/videos/${videoId}/annotation-session/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_version: workflowVersion, comment: action === "skip" ? skipReason : "" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not update annotation status.");
+      setSessionStatus(data.status);
+      setWorkflowVersion(data.workflow_version);
+      setReviewHistory(data.review_history);
+      setCompletionMessage("");
+      setWorkflowMessage(action === "skip" ? "Work skipped. Your saved annotations are kept; save an edit to resume this assignment." : "Submitted for review.");
+    } catch (cause) { setWorkflowMessage(cause instanceof Error ? cause.message : "Could not update annotation status."); }
+    finally { setWorkflowBusy(false); }
   }
 
   // One gain for the whole clip keeps relative loudness intact. Limit the gain
@@ -381,6 +429,13 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
 
   return (
     <section className="annotation-workspace">
+      {sessionLoaded && ["submitted", "approved", "returned", "skipped"].includes(sessionStatus) && <section aria-label="Review status">
+        <h2>{sessionStatus === "returned" ? "Returned for changes" : sessionStatus[0].toUpperCase() + sessionStatus.slice(1)}</h2>
+        {readOnly && <p>This annotation is read-only.{sessionStatus === "submitted" ? " Waiting for a reviewer. Refresh to check for feedback." : " Your work has been approved."}</p>}
+        {sessionStatus === "returned" && <p>Read the feedback below, save your changes, then resubmit.</p>}
+        {sessionStatus === "skipped" && <p>Your saved work is kept. Edit and save to resume this assignment.</p>}
+        <ReviewHistory events={reviewHistory} />
+      </section>}
       <div className="top-row">
         <div className="video-panel">
           <video
@@ -409,7 +464,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
         <aside className="segments-panel">
           <div className="segments-header">
             <h2>Segments</h2>
-            <button type="button" onClick={() => newSegment()} disabled={segmentsLoading || duration <= 0 || saving || deleting}>+ New segment</button>
+            <button type="button" onClick={() => newSegment()} disabled={readOnly || workflowBusy || segmentsLoading || duration <= 0 || saving || deleting}>+ New segment</button>
           </div>
           {segments.length === 0 && <p>No saved segments yet.</p>}
           {segments.map((segment) => (
@@ -436,8 +491,9 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
         selection={draft.end_time > draft.start_time
           ? { start: draft.start_time, end: draft.end_time }
           : null}
+        selectionEditable={!readOnly && !workflowBusy}
         onSelectionChange={(start_time, end_time) => {
-          if (!saving && !deleting) updateDraft({ start_time, end_time });
+          if (!readOnly && !workflowBusy && !saving && !deleting) updateDraft({ start_time, end_time });
         }}
       />
       <section aria-label="Audio waveform">
@@ -468,7 +524,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
 
       <section className="annotation-details">
         <h2>{selectedId ? "Edit segment" : "New segment"}</h2>
-        <fieldset className="annotation-fields" disabled={segmentsLoading || saving || deleting}>
+        <fieldset className="annotation-fields" disabled={readOnly || workflowBusy || segmentsLoading || saving || deleting}>
           <label>Title
             <input
               value={draft.title}
@@ -511,11 +567,11 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
         {error && <p role="alert">{error}</p>}
         {message && <p role="status">{message}</p>}
         <div className="segment-actions">
-          <button type="button" onClick={saveSegment} disabled={segmentsLoading || saving || deleting || duration <= 0}>
+          <button type="button" onClick={saveSegment} disabled={readOnly || workflowBusy || segmentsLoading || saving || deleting || duration <= 0}>
             {saving ? "Saving…" : "Save segment"}
           </button>
           {selectedId && (
-            <button type="button" onClick={deleteSelectedSegment} disabled={segmentsLoading || saving || deleting}>
+            <button type="button" onClick={deleteSelectedSegment} disabled={readOnly || workflowBusy || segmentsLoading || saving || deleting}>
               {deleting ? "Deleting…" : "Delete segment"}
             </button>
           )}
@@ -524,7 +580,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
       <section className="annotation-details">
         <h2>Whole-video summary</h2>
         <label>Video summary
-          <textarea value={summary} maxLength={20000} disabled={summaryLoading || summarySaving}
+          <textarea value={summary} maxLength={20000} disabled={readOnly || workflowBusy || summaryLoading || summarySaving}
             onChange={(event) => {
               setSummary(event.target.value);
               setSummaryStatus("Unsaved changes");
@@ -532,14 +588,24 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
             placeholder="Summarize the video as a whole." />
         </label>
         {summaryStatus && <p role="status">{summaryStatus}</p>}
-        <button type="button" onClick={saveSummary} disabled={summaryLoading || summarySaving}>
+        <button type="button" onClick={saveSummary} disabled={readOnly || workflowBusy || summaryLoading || summarySaving}>
           {summaryLoading ? "Loading…" : summarySaving ? "Saving…" : "Save summary"}
         </button>
       </section>
       {sessionStatus !== "unassigned" && <section>
         <p>Annotation: {sessionStatus.replaceAll("_", " ")}</p>
-        <button type="button" disabled={dirty || summary !== savedSummary || saving || summarySaving || sessionStatus === "completed"} onClick={completeAnnotation}>Mark complete</button>
+        {["not_started", "in_progress", "completed"].includes(sessionStatus) && <button type="button" disabled={readOnly || workflowBusy || dirty || summary !== savedSummary || saving || summarySaving || deleting || sessionStatus === "completed"} onClick={completeAnnotation}>Mark complete</button>}
         {completionMessage && <p role="status">{completionMessage}</p>}
+        {sessionLoaded && !readOnly && sessionStatus !== "skipped" && <>
+          <p>Save all changes before submitting. Submission sends your work to a reviewer and locks editing.</p>
+          <button type="button" disabled={workflowBusy || dirty || summary !== savedSummary || saving || summarySaving || deleting} onClick={() => void workflowAction(sessionStatus === "returned" ? "resubmit" : "submit")}>
+            {workflowBusy ? "Updating…" : sessionStatus === "returned" ? "Resubmit for review" : "Submit for review"}
+          </button>
+          <label>Reason for skipping (optional)<input maxLength={10000} value={skipReason} disabled={workflowBusy} onChange={(event) => setSkipReason(event.target.value)} /></label>
+          <button type="button" disabled={workflowBusy || dirty || summary !== savedSummary || saving || summarySaving || deleting} onClick={() => void workflowAction("skip")}>Skip for now</button>
+        </>}
+        {workflowMessage && <p role="status">{workflowMessage}</p>}
+        {!["submitted", "approved", "returned", "skipped"].includes(sessionStatus) && <ReviewHistory events={reviewHistory} />}
       </section>}
     </section>
   );

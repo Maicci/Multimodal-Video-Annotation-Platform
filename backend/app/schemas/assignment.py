@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-AnnotationStatus = Literal["not_started", "in_progress", "completed"]
+AnnotationStatus = Literal["not_started", "in_progress", "completed", "submitted", "returned", "approved", "skipped"]
 
 
 class AssignmentOut(BaseModel):

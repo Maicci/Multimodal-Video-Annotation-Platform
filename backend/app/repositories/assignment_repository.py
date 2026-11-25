@@ -10,7 +10,7 @@ SELECT v.id            AS video_id,
        v.duration_seconds,
        v.protocol_group,
        CASE
-           WHEN a.status = 'completed' THEN 'completed'
+           WHEN a.status IN ('completed', 'submitted', 'returned', 'approved', 'skipped') THEN a.status
            WHEN s.n > 0 OR EXISTS (SELECT 1 FROM video_summaries vs WHERE vs.video_id = a.video_id AND vs.author_id = a.user_id AND trim(vs.summary) <> '') THEN 'in_progress'
            ELSE 'not_started'
        END             AS status,
