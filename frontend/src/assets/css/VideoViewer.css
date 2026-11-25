@@ -132,6 +132,45 @@ textarea {
   border-radius: 6px;
 }
 
+/* Range thumbs travel inside the input by half their width at either end.
+   Extend the input by that amount so the thumb centre uses the waveform axis.
+   Clip only the overhang at the endpoints to avoid page overflow. */
+.waveform-seek { overflow: hidden; }
+.waveform-seek input[type="range"] {
+  appearance: none;
+  box-sizing: border-box;
+  width: calc(100% + 16px);
+  height: 24px;
+  margin: 0 -8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.waveform-seek input::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #a8c7fa;
+}
+.waveform-seek input::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: #a8c7fa;
+}
+.waveform-seek input::-moz-range-track { height: 6px; background: #a8c7fa; }
+.waveform-seek input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #a8c7fa;
+}
+.waveform-seek input:focus-visible { outline: 2px solid #79a9ed; outline-offset: -2px; }
+
 textarea {
   min-height: 120px;
   resize: vertical;
