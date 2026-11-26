@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from app.api.dependencies import Connection, CurrentUser
 from app.api.video_access import require_video_access
-from app.repositories.segment_repository import list_segments
+from app.repositories.segment_repository import list_normalized_segments, list_segments
 from app.repositories.video_summary_repository import find_video_summary
 from app.repositories.annotation_workflow import lock_assignment, require_editable, review_history
 
@@ -12,11 +12,11 @@ router = APIRouter(prefix="/api/videos/{video_id}/annotation-session", tags=["an
 
 @router.get("")
 def session(video_id: UUID, connection: Connection, user: CurrentUser):
-    require_video_access(connection, video_id, user)
+    video = require_video_access(connection, video_id, user)
     with connection:
         assignment = lock_assignment(connection, video_id, user["id"])
         return {
-            "segments": list_segments(connection, str(video_id), str(user["id"])),
+            "segments": list_normalized_segments(connection, video, user["id"], assignment),
             "summary": find_video_summary(connection, str(video_id), str(user["id"])),
             "status": assignment["status"] if assignment else "unassigned",
             "workflow_version": assignment["workflow_version"] if assignment else 0,

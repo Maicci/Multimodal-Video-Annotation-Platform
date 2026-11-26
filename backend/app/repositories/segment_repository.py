@@ -4,9 +4,11 @@ from typing import Any
 from uuid import uuid4
 
 import psycopg
+from fastapi import HTTPException
 
 from app.schemas.segment import SegmentInput
-from app.repositories.annotation_workflow import require_editable
+from app.repositories.annotation_workflow import LOCKED_STATES, require_editable
+from app.services.segment_timing import resolve_segment, timeline_for
 
 
 def list_segments(
@@ -22,6 +24,35 @@ def list_segments(
         """,
         (video_id, author_id),
     ).fetchall()
+
+
+def list_normalized_segments(connection, video, author_id, assignment):
+    rows = list_segments(connection, video.id, str(author_id))
+    if not rows or (assignment and assignment["status"] in LOCKED_STATES):
+        return rows
+    try:
+        timeline = timeline_for(video)
+    except HTTPException:
+        return rows  # Legacy text remains available before timing is ready.
+    changed = False
+    for row in rows:
+        missing_frames = row["start_frame"] is None or row["end_frame"] is None
+        old_final = row["end_frame"] == timeline.frame_count and row["end_time"] != timeline.end_time
+        if not (missing_frames or old_final or timeline.preroll_frames):
+            continue
+        segment = SegmentInput(**row)
+        try:
+            normalized = resolve_segment(video, segment, stored=True, timeline=timeline)
+        except HTTPException:
+            continue
+        if normalized != segment:
+            connection.execute("""
+                UPDATE segments SET start_time = %s, end_time = %s, start_frame = %s,
+                    end_frame = %s, version = version + 1 WHERE id = %s AND version = %s
+            """, (normalized.start_time, normalized.end_time, normalized.start_frame,
+                  normalized.end_frame, row["id"], row["version"]))
+            changed = True
+    return list_segments(connection, video.id, str(author_id)) if changed else rows
 
 
 def create_segment(

@@ -55,6 +55,21 @@ def save_work(client, base, headers):
     return segment.json()
 
 
+def test_playback_token_respects_current_video_access_after_role_change(workflow):
+    client, admin, users, base, _ = workflow
+    reviewer = users["reviewer"]
+    issued = client.post(f"{base}/media-token", headers=reviewer["headers"])
+    assert issued.status_code == 200
+    playback = {"media_token": issued.json()["token"]}
+    assert client.get(f"{base}/stream", params=playback).status_code == 200
+
+    changed = client.patch(f"/api/users/{reviewer['id']}/role", headers=admin,
+                           json={"role": "annotator"})
+    assert changed.status_code == 200
+    assert client.get(f"{base}/stream", params=playback).status_code == 403
+    assert client.post(f"{base}/media-token", headers=reviewer["headers"]).status_code == 403
+
+
 def test_return_revise_resubmit_approve_and_restart(workflow):
     client, admin, users, base, settings = workflow
     author = users["annotator"]["headers"]

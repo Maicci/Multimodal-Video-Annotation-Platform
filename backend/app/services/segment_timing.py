@@ -16,11 +16,22 @@ def timeline_for(video):
     return FrameTimeline.load(path, duration=video.duration_seconds)
 
 
+def nearest_boundary(boundaries, time):
+    right = int(np.searchsorted(boundaries, time))
+    if right == 0 or right == len(boundaries):
+        return min(right, len(boundaries) - 1)
+    # ffprobe reports seconds to six decimals. Sum integer microseconds so
+    # the rounding of two floating-point distances cannot break a midpoint tie.
+    midpoint = (round(boundaries[right - 1] * 1_000_000)
+                + round(boundaries[right] * 1_000_000)) / 2_000_000
+    return right - 1 if time <= midpoint else right
+
+
 def resolve_segment(video, payload, *, stored=False, timeline=None):
     if timeline is None:
         timeline = timeline_for(video)
     end_time = payload.end_time
-    if stored and payload.end_frame == timeline.frame_count:
+    if stored and payload.end_frame in (timeline.frame_count, timeline.frame_count + timeline.preroll_frames):
         # Existing annotations may use the old median-based final boundary.
         old_end = float(timeline.timestamps[-1]) + timeline.frame_duration
         if end_time == old_end:
@@ -28,11 +39,13 @@ def resolve_segment(video, payload, *, stored=False, timeline=None):
     if end_time > timeline.end_time:
         raise HTTPException(422, "Segment exceeds video duration")
     boundaries = np.append(timeline.timestamps, timeline.end_time)
-    start = int(np.argmin(np.abs(boundaries - payload.start_time)))
-    end = int(np.argmin(np.abs(boundaries - end_time)))
+    start = nearest_boundary(boundaries, payload.start_time)
+    end = nearest_boundary(boundaries, end_time)
     if start >= end:
         raise HTTPException(422, "Select at least one video frame.")
     for supplied, resolved in ((payload.start_frame, start), (payload.end_frame, end)):
+        if stored and supplied == resolved + timeline.preroll_frames:
+            continue
         if supplied is not None and supplied != resolved:
             raise HTTPException(422, "Frame and timestamp boundaries do not correspond.")
     return payload.model_copy(update={"start_time": float(boundaries[start]), "end_time": float(boundaries[end]), "start_frame": start, "end_frame": end})

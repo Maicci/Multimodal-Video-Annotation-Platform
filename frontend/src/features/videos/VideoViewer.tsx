@@ -81,7 +81,12 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
   }, [dirty, summary, savedSummary, onDirtyChange]);
 
   function nearestFrame(time: number) {
-    return boundaries.reduce((best, value, index) => Math.abs(value - time) < Math.abs(boundaries[best] - time) ? index : best, 0);
+    if (boundaries.length < 2) return 0;
+    const left = frameAtTime(boundaries, time);
+    // Match the API's midpoint calculation at ffprobe's microsecond precision.
+    const midpoint = (Math.round(boundaries[left] * 1_000_000)
+      + Math.round(boundaries[left + 1] * 1_000_000)) / 2_000_000;
+    return time <= midpoint ? left : left + 1;
   }
 
   function updateDraft(patch: Partial<SegmentInput>) {

@@ -1,6 +1,7 @@
 """Exercise upload, real media processing, and player endpoints together."""
 
 from collections.abc import Iterator
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -96,6 +97,36 @@ def test_upload_processing_playback_and_cleanup(client: TestClient, sample_video
     assert deleted.status_code == 204, deleted.text
     assert client.get("/api/videos", headers=headers).json() == []
     assert client.get(f"{base}/stream").status_code == 404
+
+
+def test_trimmed_mp4_timeline_matches_displayed_frames(client, sample_video, tmp_path):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(sample_video)
+    clip = tmp_path / "trimmed.mp4"
+    # A cut between keyframes keeps earlier packets for decoding.
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-ss", "0.7", "-i", str(source),
+        "-c", "copy", str(clip),
+    ], check=True, timeout=15)
+    decoded = subprocess.run([
+        "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_frames",
+        "-show_entries", "frame=best_effort_timestamp_time", "-of", "json", str(clip),
+    ], check=True, capture_output=True, text=True, timeout=15)
+    timestamps = [float(frame["best_effort_timestamp_time"])
+                  for frame in json.loads(decoded.stdout)["frames"]]
+    assert timestamps and timestamps[0] == 0
+
+    login = client.post("/api/auth/login", json={
+        "email": "player-admin@example.com", "password": "initial-admin-password-123",
+    })
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    upload = client.post("/api/videos/upload", headers=headers,
+                         files={"upload": (clip.name, clip.read_bytes(), "video/mp4")})
+    assert upload.status_code == 201, upload.text
+    timeline = client.get(f"/api/videos/{upload.json()['id']}/timeline", headers=headers)
+    assert timeline.status_code == 200, timeline.text
+    assert timeline.json()["boundaries"][:-1] == pytest.approx(timestamps)
 
 
 def test_processing_failure_preserves_reason(client, sample_video, monkeypatch):
