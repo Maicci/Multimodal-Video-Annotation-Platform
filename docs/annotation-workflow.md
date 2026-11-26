@@ -29,7 +29,7 @@ Returned work remains returned while edits are saved, until it is resubmitted.
 Segment intervals are half-open: start is inclusive, end exclusive. Frame N,
 where N is the frame count, denotes the end of the video. Timestamp edits and
 timeline drags snap to the nearest stored boundary; ties choose the earlier one.
-The final boundary uses the timestamp map's estimated last-frame duration.
+The final boundary uses the probed video duration when available and falls back to the timestamp map's estimated last-frame duration.
 New saves persist both frames and timestamps. Existing segments are normalized
 when loaded if their timing artifact is available. Legacy ranges shorter than a
 frame, or with missing timing, retain their text and must be corrected/reprocessed

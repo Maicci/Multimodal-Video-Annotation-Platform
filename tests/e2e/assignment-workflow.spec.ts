@@ -29,7 +29,15 @@ test('administrator approves and assigns a video that the annotator can annotate
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Register', exact: true }).click();
-    await expect(page.getByText('Registration successful. Your account is waiting for administrator approval.')).toBeVisible();
+    const receipt = 'Registration request received. New accounts require administrator approval.';
+    await expect(page.getByRole('status')).toHaveText(receipt);
+    await page.getByLabel('Full name').fill('Repeated registration');
+    await page.getByLabel('Password').fill('different-password-123');
+    const repeat = page.waitForResponse(response => response.url().endsWith('/api/auth/register'));
+    await page.getByRole('button', { name: 'Register', exact: true }).click();
+    expect((await repeat).status()).toBe(202);
+    await expect(page.getByRole('status')).toHaveText(receipt);
+    await expect(page.getByRole('alert')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Already have an account? Sign in' }).click();
     await page.getByLabel('Email').fill(process.env.TEST_ADMIN_EMAIL || 'admin@example.com');
@@ -157,4 +165,18 @@ test('administrator approves and assigns a video that the annotator can annotate
       rmSync(tempDir, { recursive: true, force: true });
     }
   }
+});
+
+
+test('registration keeps the form usable after server validation', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /Register/ }).click();
+  await page.getByLabel('Full name').fill('Example User');
+  await page.getByLabel('Email').fill('demo@localhost');
+  await page.getByLabel('Password').fill('sample-password-123');
+  await page.getByRole('button', { name: 'Register', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Enter a valid email address');
+  await expect(page.getByLabel('Full name')).toHaveValue('Example User');
+  await page.getByLabel('Email').fill('corrected@example.com');
+  await expect(page.getByRole('button', { name: 'Register', exact: true })).toBeEnabled();
 });

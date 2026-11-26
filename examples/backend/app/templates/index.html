@@ -20,17 +20,18 @@
       <form id="video-form">
         <label>
           Title
-          <input name="title" type="text" value="Sample video" required />
+          <input name="title" type="text" value="Sample video" maxlength="120" required />
         </label>
         <label>
           File name
-          <input name="filename" type="text" value="sample.mp4" required />
+          <input name="filename" type="text" value="sample.mp4" maxlength="255" required />
         </label>
         <label>
           Annotator ID
-          <input name="annotator_id" type="text" value="annotator-1" required />
+          <input name="annotator_id" type="text" value="annotator-1" maxlength="120" required />
         </label>
         <button type="submit">Create video</button>
+        <p id="video-form-error" role="alert"></p>
       </form>
     </section>
 

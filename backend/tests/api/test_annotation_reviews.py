@@ -93,6 +93,11 @@ def test_return_revise_resubmit_approve_and_restart(workflow):
     assert history[0]["actor_id"] == users["annotator"]["id"]
     assert all(event["created_at"] for event in history)
 
+    for name in ("annotator", "reviewer"):
+        deletion = client.delete(f"/api/users/{users[name]['id']}", headers=admin)
+        assert deletion.status_code == 409
+    assert client.get(review, headers=reviewer).json()["review_history"] == history
+
     # A new application instance runs initialization/migrations against the same
     # stored database. The accepted revision, lock and audit history must survive.
     with TestClient(create_app(settings)) as restarted:

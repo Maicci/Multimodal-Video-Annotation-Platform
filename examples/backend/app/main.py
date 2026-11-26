@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import uuid
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.services.multimodal_processing import ProcessingJobManager
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR.parent / 'frontend' / 'src' / 'assets'
-TEMPLATE_DIR = BASE_DIR / 'templates'
+TEMPLATE_DIR = Path(__file__).resolve().parent / 'templates'
 UPLOAD_DIR = BASE_DIR.parent.parent / 'data' / 'uploads'
 MAX_UPLOAD_BYTES = 1024 ** 3
 ALLOWED_VIDEO_SUFFIXES = {'.mp4', '.mov', '.mkv', '.webm'}
@@ -35,9 +35,11 @@ PROCESSING_JOBS = ProcessingJobManager()
 
 
 class VideoCreateRequest(BaseModel):
-    title: str = Field(..., min_length=1)
-    filename: str = Field(..., min_length=1)
-    annotator_id: str = Field(..., min_length=1)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=120)
+    filename: str = Field(min_length=1, max_length=255)
+    annotator_id: str = Field(min_length=1, max_length=120)
 
 
 class VideoResponse(BaseModel):
@@ -52,14 +54,22 @@ class VideoResponse(BaseModel):
 class SegmentRequest(BaseModel):
     start_frame: int = Field(..., ge=0)
     end_frame: int = Field(..., ge=0)
-    start_timestamp: float = 0.0
-    end_timestamp: float = 0.0
-    video_description: str = ''
-    audio_description: str = ''
+    start_timestamp: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    end_timestamp: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    video_description: str = Field(default="", max_length=10000)
+    audio_description: str = Field(default="", max_length=10000)
+
+    @model_validator(mode="after")
+    def ordered_range(self):
+        if self.end_frame < self.start_frame or self.end_timestamp < self.start_timestamp:
+            raise ValueError("Segment end must be at or after its start")
+        return self
 
 
 class SummaryRequest(BaseModel):
-    summary: str = Field(..., min_length=1)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    summary: str = Field(min_length=1, max_length=20000)
 
 
 class VideoSummaryResponse(BaseModel):
@@ -115,14 +125,17 @@ def create_video(payload: VideoCreateRequest) -> VideoResponse:
 def upload_video(video_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
     if video_id not in VIDEO_STORE:
         raise HTTPException(status_code=404, detail='Video not found')
-    filename = Path(file.filename or '').name
+    filename = (file.filename or '').replace('\\', '/').rsplit('/', 1)[-1]
+    if (not filename or not filename.isprintable() or len(filename.encode('utf-8')) > 255
+            or PureWindowsPath(filename).is_reserved() or any(c in '<>:"|?*' for c in filename)):
+        raise HTTPException(status_code=400, detail='Invalid filename')
     if Path(filename).suffix.lower() not in ALLOWED_VIDEO_SUFFIXES:
         raise HTTPException(status_code=415, detail='Unsupported video format')
 
     destination_dir = UPLOAD_DIR / video_id
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / filename
-    temporary = destination.with_name(f'.{destination.name}.{uuid.uuid4().hex}.part')
+    temporary = destination.with_name(f'.{uuid.uuid4().hex}.part')
     size = 0
     try:
         with temporary.open('wb') as output:
@@ -161,7 +174,7 @@ def get_processing_job(job_id: str) -> ProcessingJobResponse:
 
 
 @app.get('/api/videos/{video_id}/segments')
-def get_segments(video_id: str) -> Dict[str, List[Dict]]:
+def get_segments(video_id: str) -> Dict[str, Any]:
     if video_id not in VIDEO_STORE:
         raise HTTPException(status_code=404, detail='Video not found')
     return {'video_id': video_id, 'segments': SEGMENT_STORE.get(video_id, [])}

@@ -82,6 +82,10 @@ def test_upload_processing_playback_and_cleanup(client: TestClient, sample_video
     assert frame_time.status_code == 200, frame_time.text
     assert frame_time.json()["time"] == pytest.approx(0, abs=0.1)
 
+    for invalid_frame in (-1, timeline.json()["frame_count"]):
+        assert client.get(f"{base}/frame-time", params={"frame": invalid_frame}).status_code == 422
+    assert client.get(f"{base}/frame", params={"time": "NaN"}).status_code == 422
+
     for index in (1, 12):
         thumbnail = client.get(f"{base}/thumbnails/{index}")
         assert thumbnail.status_code == 200, thumbnail.text
@@ -105,3 +109,54 @@ def test_processing_failure_preserves_reason(client, sample_video, monkeypatch):
     video = client.get("/api/videos", headers=headers).json()[0]
     assert video["status"] == "FAILED"
     assert "Thumbnail generation failed" in video["processing_error"]
+
+
+def test_unreadable_video_is_rejected_and_removed(client):
+    login = client.post("/api/auth/login", json={
+        "email": "player-admin@example.com", "password": "initial-admin-password-123",
+    })
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    result = client.post("/api/videos/upload", headers=headers,
+                         files={"upload": ("empty.mp4", b"", "video/mp4")})
+    assert result.status_code == 422
+    assert client.get("/api/videos", headers=headers).json() == []
+    assert list(client.app.state.settings.video_storage_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("frames", [1, 2])
+def test_can_submit_every_frame_of_a_short_clip(client, tmp_path, frames):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("FFmpeg and ffprobe are needed for the media integration test")
+    path = tmp_path / "short.mp4"
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=s=64x64:r=24",
+        "-frames:v", str(frames), str(path),
+    ], check=True)
+
+    def login(email, password):
+        result = client.post("/api/auth/login", json={"email": email, "password": password})
+        return {"Authorization": f"Bearer {result.json()['access_token']}"}
+
+    admin = login("player-admin@example.com", "initial-admin-password-123")
+    account = {"email": "author@example.com", "password": "author-password-123",
+               "full_name": "Author", "role": "annotator"}
+    author_id = client.post("/api/users", json=account, headers=admin).json()["id"]
+    author = login(account["email"], account["password"])
+    uploaded = client.post("/api/videos/upload", headers=admin,
+                           files={"upload": (path.name, path.read_bytes(), "video/mp4")})
+    assert uploaded.status_code == 201
+    video = uploaded.json()
+    base = f"/api/videos/{video['id']}"
+    assert client.post("/api/assignments", headers=admin,
+                       json={"annotator_id": author_id, "video_id": video["id"]}).is_success
+    limits = client.get(f"{base}/timeline", headers=author).json()["boundaries"]
+    assert limits[-1] == video["duration"]
+    segment = client.post(f"{base}/segments", headers=author, json={
+        "title": "Entire clip", "description": "Still image", "audio_description": "Silent",
+        "start_time": 0, "end_time": limits[-1],
+    })
+    assert segment.status_code == 201, segment.text
+    assert segment.json()["end_frame"] == frames
+    assert client.put(f"{base}/summary", headers=author, json={"summary": "Still image"}).is_success
+    submitted = client.post(f"{base}/annotation-session/submit", headers=author, json={"expected_version": 0})
+    assert submitted.status_code == 200, submitted.text

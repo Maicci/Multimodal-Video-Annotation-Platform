@@ -5,7 +5,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager, closing
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
@@ -71,6 +73,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_error(_: Request, error: RequestValidationError) -> JSONResponse:
+        # Send field diagnostics without echoing passwords or raw request bodies.
+        detail = [{key: item[key] for key in ("loc", "msg", "type")} for item in error.errors()]
+        return JSONResponse(status_code=422, content={"detail": detail})
 
     application.add_middleware(
         CORSMiddleware,

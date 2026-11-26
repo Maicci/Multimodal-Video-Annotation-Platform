@@ -53,6 +53,8 @@ class FrameTimeline:
 
     timestamps: np.ndarray  # timestamps[i] = timestamps (seconds) of frame i
 
+    duration: float | None = None
+
     def __post_init__(self):
         self.timestamps = np.asarray(self.timestamps, dtype=np.float64)
         if self.timestamps.ndim != 1 or len(self.timestamps) == 0:
@@ -70,8 +72,8 @@ class FrameTimeline:
 
     @classmethod
     # load from .npy file and return a FrameTimeline instance
-    def load(cls, path: str | Path) -> "FrameTimeline":
-        return cls(np.load(path))
+    def load(cls, path: str | Path, *, duration: float | None = None) -> "FrameTimeline":
+        return cls(np.load(path), duration)
 
     # ----- basic properties -----
     @property
@@ -97,6 +99,8 @@ class FrameTimeline:
     # Return the timestamp of the last frame (seconds).
     def end_time(self) -> float:
         """Time at which the last frame stops being displayed."""
+        if self.duration is not None and self.duration > self.timestamps[-1]:
+            return self.duration
         return float(self.timestamps[-1]) + self.frame_duration
 
     @property

@@ -179,7 +179,7 @@ class MultimodalProcessingPipeline:
         subprocess.run(
             [
                 'ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(self.source_path), '-map', '0:a:0',
-                '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', str(destination),
+                '-vn', '-ac', '1', '-af', 'aresample=16000:async=1:first_pts=0', '-ar', '16000', '-c:a', 'pcm_s16le', str(destination),
             ],
             capture_output=True,
             text=True,

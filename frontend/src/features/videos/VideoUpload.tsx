@@ -3,7 +3,6 @@ import "../../assets/css/VideoUpload.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
-const ALLOWED_TYPES = ["video/mp4", "video/quicktime"];
 
 type Props = { onUploaded: () => void };
 
@@ -60,7 +59,7 @@ function VideoUpload({ onUploaded }: Props) {
     setUploadPercent(null);
 
     if (!selectedFile) return;
-    if (!ALLOWED_TYPES.includes(selectedFile.type)) {
+    if (!/\.(mp4|mov)$/i.test(selectedFile.name)) {
       setError("Only MP4 and MOV files are supported.");
       return;
     }

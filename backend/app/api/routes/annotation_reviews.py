@@ -12,14 +12,15 @@ from app.repositories.annotation_workflow import lock_assignment, review_history
 from app.repositories.segment_repository import list_segments
 from app.repositories.video_summary_repository import find_video_summary
 from app.schemas.segment import SegmentInput
-from app.services.segment_timing import resolve_segment
+from app.schemas.text import DatabaseText
+from app.services.segment_timing import resolve_segment, timeline_for
 
 router = APIRouter(tags=["annotation reviews"])
 
 
 class WorkflowAction(BaseModel):
     expected_version: int = Field(ge=0)
-    comment: str = Field(default="", max_length=10000)
+    comment: DatabaseText = Field(default="", max_length=10000)
 
     @field_validator("comment")
     @classmethod
@@ -71,11 +72,10 @@ def submit_work(video_id, connection, user, payload, resubmit=False):
             raise HTTPException(422, "Save at least one segment with both descriptions and a whole-video summary before submitting.")
         if video.processing_status != "COMPLETED":
             raise HTTPException(409, "Wait for video processing before submitting.")
+        timeline = timeline_for(video)
         normalized = []
         for segment in segments:
-            if video.duration_seconds is not None and segment["end_time"] > video.duration_seconds:
-                raise HTTPException(422, "A segment exceeds the video duration.")
-            timing = resolve_segment(video, SegmentInput(**segment))
+            timing = resolve_segment(video, SegmentInput(**segment), stored=True, timeline=timeline)
             normalized.append({**segment, **timing.model_dump()})
         return record_event(connection, assignment, user, "resubmitted" if resubmit else "submitted",
                             "submitted", payload, {"segments": normalized, "summary": summary["summary"]})

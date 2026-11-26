@@ -165,6 +165,7 @@ def change_user_role(
     payload: RoleUpdate,
     connection: Connection,
 ) -> UserResponse:
+    connection.execute("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE")
     user = find_user_by_id(connection, str(user_id))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -191,12 +192,15 @@ def delete_user(
         Depends(require_roles(Role.ADMINISTRATOR)),
     ],
 ) -> None:
-    if actor["id"] == str(user_id):
+    if actor["id"] == user_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Administrators cannot delete their own account",
         )
 
+    connection.execute("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE")
+    # Block new work referencing this author until the history check and delete finish.
+    connection.execute("SELECT id FROM users WHERE id = %s FOR UPDATE", (user_id,))
     user = find_user_by_id(connection, str(user_id))
 
     if user is None:
@@ -216,6 +220,17 @@ def delete_user(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Cannot delete the last administrator",
             )
+
+    if connection.execute("""
+        SELECT EXISTS (SELECT FROM segments WHERE author_id = %(id)s)
+            OR EXISTS (SELECT FROM video_summaries WHERE author_id = %(id)s)
+            OR EXISTS (
+                SELECT FROM annotation_review_events e
+                JOIN video_assignments a ON a.id = e.assignment_id
+                WHERE e.actor_id = %(id)s OR a.user_id = %(id)s
+            ) AS has_work
+    """, {"id": user_id}).fetchone()["has_work"]:
+        raise HTTPException(409, "Cannot delete a user with annotations or review history")
 
     try:
         delete_user_record(connection, str(user_id))

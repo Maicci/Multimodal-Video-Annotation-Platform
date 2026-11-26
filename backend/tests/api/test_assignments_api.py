@@ -71,9 +71,10 @@ def test_assignment_uses_active_annotator_id(client: TestClient) -> None:
         "email": "pending@example.com", "full_name": "Pending User",
         "password": "secure-test-password-123",
     })
-    assert pending.status_code == 201, pending.text
+    assert pending.status_code == 202, pending.text
+    [pending_user] = client.get("/api/users/pending", headers=admin).json()
     assert client.post("/api/assignments", headers=admin, json={
-        "video_id": video_id, "annotator_id": pending.json()["id"],
+        "video_id": video_id, "annotator_id": pending_user["id"],
     }).status_code == 400
     assert client.post("/api/assignments", headers=admin, json={
         "video_id": video_id, "annotator_id": str(uuid4()),
