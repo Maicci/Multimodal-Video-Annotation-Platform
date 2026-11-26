@@ -139,6 +139,23 @@ def test_video_summary_is_saved_and_isolated_per_annotator(client: TestClient) -
     assert client.get(url, headers=_auth(other)).json()["summary"] == "Another view."
 
 
+def test_first_summary_save_requires_version_zero(client: TestClient) -> None:
+    headers = _auth(_login(client, "admin@example.com", "initial-admin-password-123"))
+    upload = client.post(
+        "/api/videos/upload", headers=headers,
+        files={"upload": ("summary.mp4", b"video bytes", "video/mp4")},
+    )
+    assert upload.status_code == 201, upload.text
+    url = f"/api/videos/{upload.json()['id']}/summary"
+    initial = client.get(url, headers=headers).json()
+    assert initial["version"] == 0
+
+    response = client.put(url, headers=headers, json={"summary": "Draft", "version": 1})
+
+    assert response.status_code == 409, response.text
+    assert client.get(url, headers=headers).json() == initial
+
+
 def test_access_media_scope_and_stale_saves(client: TestClient) -> None:
     admin = _login(client, "admin@example.com", "initial-admin-password-123")
     headers = _auth(admin)
