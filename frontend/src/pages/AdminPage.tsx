@@ -1,6 +1,7 @@
 // Main administrator page.
 
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../api/errorMessage";
 import VideoUpload from "../features/videos/VideoUpload";
 import VideoList, { type VideoItem } from "../features/videos/VideoList";
 import PendingUsers from "../features/users/PendingUsers";
@@ -222,7 +223,7 @@ function AdminPage({
         const data = await res.json().catch(() => null);
 
         setAssignError(
-          data?.detail ?? `Could not assign video (${res.status}).`
+          errorMessage(data?.detail, `Could not assign video (${res.status}).`)
         );
 
         return;

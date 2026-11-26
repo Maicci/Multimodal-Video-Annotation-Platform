@@ -6,7 +6,8 @@ from app.db.models.video import Video
 from app.api.dependencies import Connection
 from app.services.frame_timing import FrameTimeline
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Annotated
+from fastapi import APIRouter, HTTPException, Depends, Query
 from app.api.video_access import media_user
 from fastapi.responses import FileResponse
 
@@ -63,7 +64,7 @@ def get_timeline(video_id: str, connection: Connection):
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(timeline_path)
+    timeline = FrameTimeline.load(timeline_path, duration=video.duration_seconds)
 
     return {
         "frame_count": timeline.frame_count,
@@ -75,7 +76,7 @@ def get_timeline(video_id: str, connection: Connection):
 @router.get("/videos/{video_id}/frame")
 def get_frame(
     video_id: str,
-    time: float,
+    time: Annotated[float, Query(allow_inf_nan=False)],
     connection: Connection,
 ):
     video = find_video_by_id(connection, video_id)
@@ -94,7 +95,7 @@ def get_frame(
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(timeline_path)
+    timeline = FrameTimeline.load(timeline_path, duration=video.duration_seconds)
 
     return {
         "frame": timeline.time_to_frame(time),
@@ -105,7 +106,7 @@ def get_frame(
 @router.get("/videos/{video_id}/frame-time")
 def get_frame_time(
     video_id: str,
-    frame: int,
+    frame: Annotated[int, Query(ge=0)],
     connection: Connection,
 ):
     video = find_video_by_id(connection, video_id)
@@ -124,8 +125,10 @@ def get_frame_time(
             detail="Timeline not found",
         )
 
-    timeline = FrameTimeline.load(timeline_path)
+    timeline = FrameTimeline.load(timeline_path, duration=video.duration_seconds)
 
+    if frame >= timeline.frame_count:
+        raise HTTPException(422, f"Frame must be between 0 and {timeline.frame_count - 1}")
     return {
         "time": timeline.frame_to_time(frame),
     }

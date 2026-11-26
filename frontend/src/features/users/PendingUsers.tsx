@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { errorMessage } from "../../api/errorMessage";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -42,7 +43,7 @@ export default function PendingUsers() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail ?? "Failed to load pending users");
+        setError(errorMessage(data?.detail, "Failed to load pending users"));
         return;
       }
 
@@ -95,7 +96,7 @@ export default function PendingUsers() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail ?? "Failed to approve user");
+        setError(errorMessage(data?.detail, "Failed to approve user"));
         return;
       }
 
@@ -134,7 +135,7 @@ export default function PendingUsers() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail ?? "Failed to reject user");
+        setError(errorMessage(data?.detail, "Failed to reject user"));
         return;
       }
 

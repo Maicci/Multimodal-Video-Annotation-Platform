@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.text import DatabaseText
+
 
 class Role(str, Enum):
     ANNOTATOR = "annotator"
@@ -22,22 +24,25 @@ class UserStatus(str, Enum):
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
-    full_name: str = Field(min_length=1, max_length=120)
+    email: DatabaseText = Field(min_length=3, max_length=254)
+    full_name: DatabaseText = Field(min_length=1, max_length=120)
     password: str = Field(min_length=12, max_length=128)
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+        if not normalized.isprintable() or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
             raise ValueError("Enter a valid email address")
         return normalized
 
     @field_validator("full_name")
     @classmethod
     def normalize_name(cls, value: str) -> str:
-        return value.strip()
+        value = value.strip()
+        if not value or not value.isprintable():
+            raise ValueError("Enter a name without control characters")
+        return value
 
 
 class UserApprovalRequest(BaseModel):
@@ -45,7 +50,7 @@ class UserApprovalRequest(BaseModel):
     
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
+    email: DatabaseText = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=128)
 
     @field_validator("email")
@@ -54,24 +59,8 @@ class LoginRequest(BaseModel):
         return value.strip().lower()
 
 
-class UserCreate(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
-    full_name: str = Field(min_length=1, max_length=120)
-    password: str = Field(min_length=12, max_length=128)
+class UserCreate(RegisterRequest):
     role: Role
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
-            raise ValueError("Enter a valid email address")
-        return normalized
-
-    @field_validator("full_name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        return value.strip()
 
 
 class RoleUpdate(BaseModel):

@@ -234,7 +234,7 @@ function VideoViewer({ videoId, onDirtyChange }: Props) {
     setDraft({
       title: "",
       start_time: Number(start.toFixed(2)),
-      end_time: Number(Math.min(duration, start + 5).toFixed(2)),
+      end_time: Math.min(duration, Number((start + 5).toFixed(2))),
       description: "",
       audio_description: "",
     });

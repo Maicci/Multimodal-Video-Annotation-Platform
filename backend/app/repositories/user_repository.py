@@ -88,7 +88,7 @@ def count_users_with_role(
     connection: psycopg.Connection[dict[str, Any]], role: str
 ) -> int:
     row = connection.execute(
-        "SELECT COUNT(*) AS count FROM users WHERE role = %s",
+        "SELECT COUNT(*) AS count FROM users WHERE role = %s AND status = 'active'",
         (role,),
     ).fetchone()
 
@@ -134,9 +134,9 @@ def create_pending_user(
     email: str,
     full_name: str,
     password_hash: str,
-) -> dict[str, Any]:
+) -> None:
     with connection.transaction():
-        user = connection.execute(
+        connection.execute(
             """
             INSERT INTO users (
                 id,
@@ -147,7 +147,7 @@ def create_pending_user(
                 password_hash
             )
             VALUES (%s, %s, %s, NULL, 'pending', %s)
-            RETURNING id, email, full_name, role, status, created_at
+            ON CONFLICT (email) DO NOTHING
             """,
             (
                 str(uuid4()),
@@ -155,9 +155,8 @@ def create_pending_user(
                 full_name,
                 password_hash,
             ),
-        ).fetchone()
+        )
     connection.commit()
-    return user
 
 
 def list_pending_users(

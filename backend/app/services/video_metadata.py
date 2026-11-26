@@ -17,6 +17,10 @@ class VideoMetadataError(Exception):
     """Raised when ffprobe cannot extract usable video metadata."""
 
 
+class InvalidVideoError(VideoMetadataError):
+    """The upload is not a supported, readable video."""
+
+
 @dataclass(frozen=True)
 class VideoMetadata:
     duration_seconds: float | None
@@ -46,7 +50,7 @@ def extract_video_metadata(path: Path) -> VideoMetadata:
                 "-v",
                 "error",
                 "-show_entries",
-                "format=duration:stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration",
+                "format=format_name,duration:stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,duration",
                 "-of",
                 "json",
                 str(path),
@@ -62,6 +66,8 @@ def extract_video_metadata(path: Path) -> VideoMetadata:
             stream for stream in streams if stream.get("codec_type") == "video"
         )
         format_info = probe_result.get("format", {})
+        if "mov" not in format_info.get("format_name", "").split(","):
+            raise InvalidVideoError("Expected an MP4/MOV container")
         duration = _optional_float(video_stream.get("duration"))
         if duration is None:
             duration = _optional_float(format_info.get("duration"))
@@ -75,12 +81,14 @@ def extract_video_metadata(path: Path) -> VideoMetadata:
             fps=_frame_rate(frame_rate),
             codec=video_stream.get("codec_name"),
         )
+    except (subprocess.CalledProcessError, StopIteration) as error:
+        raise InvalidVideoError("Could not read a video stream") from error
     except (
         OSError,
         subprocess.SubprocessError,
         ValueError,
         KeyError,
-        StopIteration,
+        ZeroDivisionError,
         TypeError,
     ) as error:
         logger.exception("Could not extract metadata for %s", path)

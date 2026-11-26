@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -111,34 +113,37 @@ def test_registration_persists_until_approval_or_rejection(client: TestClient) -
             "password": password,
         },
     )
-    assert registered.status_code == 201, registered.text
-    assert registered.json()["status"] == "pending"
-    assert registered.json()["role"] is None
+    assert registered.status_code == 202
+    assert registered.content == b""
 
-    duplicate = client.post(
-        "/api/auth/register",
-        json={
-            "email": "new-annotator@example.com",
-            "full_name": "New Annotator",
-            "password": password,
-        },
-    )
-    assert duplicate.status_code == 409, duplicate.text
+    def register_again(email):
+        duplicate = client.post("/api/auth/register", json={
+            "email": email, "full_name": "Different Name", "password": "different-password-123",
+        })
+        assert (duplicate.status_code, duplicate.content) == (registered.status_code, registered.content)
+
+    register_again(" NEW-ANNOTATOR@example.com ")
+    register_again(ADMIN_EMAIL)
 
     pending_login = client.post(
         "/api/auth/login",
         json={"email": "new-annotator@example.com", "password": password},
     )
-    assert pending_login.status_code == 403
+    unknown_login = client.post("/api/auth/login", json={"email": "absent@example.com", "password": password})
+    assert pending_login.status_code == unknown_login.status_code == 401
+    assert pending_login.content == unknown_login.content
 
     admin_token = login(client, ADMIN_EMAIL, ADMIN_PASSWORD)
     headers = {"Authorization": f"Bearer {admin_token}"}
     pending = client.get("/api/users/pending", headers=headers)
     assert pending.status_code == 200
-    assert any(user["id"] == registered.json()["id"] for user in pending.json())
+    [pending_user] = pending.json()
+    assert pending_user["full_name"] == "New Annotator"
+    assert pending_user["status"] == "pending"
+    assert pending_user["role"] is None
 
     approved = client.patch(
-        f"/api/users/{registered.json()['id']}/approve",
+        f"/api/users/{pending_user['id']}/approve",
         headers=headers,
         json={"role": "annotator"},
     )
@@ -159,13 +164,47 @@ def test_registration_persists_until_approval_or_rejection(client: TestClient) -
             "password": password,
         },
     )
-    assert rejected.status_code == 201
-    decision = client.patch(f"/api/users/{rejected.json()['id']}/reject", headers=headers)
+    assert (rejected.status_code, rejected.content) == (registered.status_code, registered.content)
+    [awaiting_review] = client.get("/api/users/pending", headers=headers).json()
+    decision = client.patch(f"/api/users/{awaiting_review['id']}/reject", headers=headers)
     assert decision.status_code == 200, decision.text
     assert decision.json()["status"] == "rejected"
+    register_again("rejected@example.com")
+    assert client.get("/api/users/pending", headers=headers).json() == []
     rejected_login = client.post(
         "/api/auth/login",
         json={"email": "rejected@example.com", "password": password},
     )
-    assert rejected_login.status_code == 403
+    assert rejected_login.status_code == 401
+    assert rejected_login.content == unknown_login.content
     
+
+
+def test_admin_account_guards(client):
+    token = login(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.get("/api/auth/me", headers=headers).json()
+    second = create_user(client, token, "second@example.com", "administrator")
+    assert client.delete(f"/api/users/{first['id']}", headers=headers).status_code == 409
+
+    ready = Barrier(2)
+    def demote(user):
+        ready.wait(timeout=5)
+        return client.patch(f"/api/users/{user['id']}/role", headers=headers,
+                            json={"role": "annotator"}).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = list(pool.map(demote, (first, second)))
+    assert statuses.count(200) == 1
+    assert all(status in (200, 403, 409) for status in statuses)
+    with client.app.state.database.connect() as connection:
+        assert connection.execute("SELECT count(*) AS n FROM users WHERE role = 'administrator'").fetchone()["n"] == 1
+
+
+def test_registration_returns_field_errors_without_echoing_input(client):
+    response = client.post("/api/auth/register", json={
+        "email": "user@localhost", "full_name": "   ", "password": "short",
+    })
+    assert response.status_code == 422
+    assert {error["loc"][-1] for error in response.json()["detail"]} == {"email", "full_name", "password"}
+    assert all("input" not in error for error in response.json()["detail"])

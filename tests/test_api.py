@@ -131,3 +131,13 @@ def test_upload_rejects_unsupported_file_type(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 415
+
+
+def test_example_homepage_and_segment_list():
+    page = client.get("/")
+    assert page.status_code == 200
+    assert 'id="video-form"' in page.text
+    video = client.post("/api/videos", json={"title": "Scene", "filename": "clip.mp4", "annotator_id": "author"}).json()
+    url = f"/api/videos/{video['id']}/segments"
+    assert client.get(url).json() == {"video_id": video["id"], "segments": []}
+    assert client.post(url, json={"start_frame": 3, "end_frame": 2}).status_code == 422

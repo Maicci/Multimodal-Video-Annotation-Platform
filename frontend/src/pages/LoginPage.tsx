@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { errorMessage } from "../api/errorMessage";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -42,8 +43,7 @@ export default function LoginPage({
         const data = await response.json().catch(() => null);
 
         setError(
-          data?.detail ??
-            `Login failed (${response.status})`
+          errorMessage(data?.detail, `Login failed (${response.status})`)
         );
 
         return;
@@ -87,16 +87,16 @@ export default function LoginPage({
       if (!response.ok) {
         const data = await response.json().catch(() => null);
 
-        setError(
-          data?.detail ??
-            `Registration failed (${response.status})`
-        );
+        const fallback = "Registration is unavailable. Please try again later.";
+        setError(response.status === 422 && Array.isArray(data?.detail)
+          ? errorMessage(data.detail, "Check your registration details.")
+          : fallback);
 
         return;
       }
 
       setMessage(
-        "Registration successful. Your account is waiting for administrator approval."
+        "Registration request received. New accounts require administrator approval."
       );
 
       setFullName("");
@@ -147,6 +147,7 @@ export default function LoginPage({
               <input
                 id="full-name"
                 type="text"
+                maxLength={120}
                 value={fullName}
                 onChange={(event) =>
                   setFullName(event.target.value)
@@ -164,6 +165,7 @@ export default function LoginPage({
             <input
               id="email"
               type="email"
+              maxLength={254}
               value={email}
               onChange={(event) =>
                 setEmail(event.target.value)
@@ -184,19 +186,20 @@ export default function LoginPage({
               onChange={(event) =>
                 setPassword(event.target.value)
               }
-              minLength={12}
+              minLength={mode === "register" ? 12 : 1}
+              maxLength={128}
               required
             />
           </div>
 
           {error && (
-            <p className="login-error">
+            <p className="login-error" role="alert">
               {error}
             </p>
           )}
 
           {message && (
-            <p className="login-message">
+            <p className="login-message" role="status">
               {message}
             </p>
           )}

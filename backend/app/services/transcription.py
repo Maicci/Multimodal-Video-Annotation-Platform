@@ -25,7 +25,7 @@ def transcribe(source: str, model_name: str) -> dict:
         audio = Path(directory) / "audio.wav"
         extraction = subprocess.run([
             "ffmpeg", "-nostdin", "-v", "error", "-y", "-i", source,
-            "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(audio),
+            "-map", "0:a:0", "-vn", "-ac", "1", "-af", "aresample=16000:async=1:first_pts=0", "-ar", "16000", "-c:a", "pcm_s16le", str(audio),
         ], capture_output=True, text=True)
         if extraction.returncode:
             raise ValueError("Audio extraction failed. Check that the video has a valid audio track.")

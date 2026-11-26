@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from pathlib import Path
 from typing import cast
 from unittest.mock import Mock
@@ -230,3 +232,21 @@ def test_database_failure_returns_500_and_removes_file(
     assert response.json() == {"error": "Database failure"}
     assert list(_app(client).state.settings.video_storage_path.glob("*")) == []
     
+
+
+def test_concurrent_uploads_share_one_filename(client, monkeypatch):
+    monkeypatch.setattr("app.api.routes.videos.extract_video_metadata", _metadata_for_existing_file)
+    monkeypatch.setattr("app.api.routes.videos.process_video", Mock())
+    token = _token(client)
+    ready = Barrier(2)
+
+    def upload(content):
+        ready.wait(timeout=5)
+        return _upload(client, token, content=content)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = sorted(pool.map(upload, [b"first", b"second"]), key=lambda response: response.status_code)
+    created, duplicate = responses
+    assert [created.status_code, duplicate.status_code] == [201, 409]
+    assert duplicate.json()["video_id"] == created.json()["id"]
+    assert len(list(_app(client).state.settings.video_storage_path.iterdir())) == 1

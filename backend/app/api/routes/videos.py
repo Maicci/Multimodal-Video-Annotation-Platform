@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
 import psycopg
 from pathlib import Path
 from typing import Annotated
@@ -23,6 +22,7 @@ from app.repositories.video_repository import (
 )
 from app.schemas.video import VideoListItem, VideoUploadResponse
 from app.services.video_metadata import (
+    InvalidVideoError,
     VideoMetadataError,
     extract_video_metadata,
 )
@@ -35,7 +35,7 @@ from app.services.video_storage import (
 )
 
 logger = logging.getLogger(__name__)
-ALLOWED_EXTENSIONS = {".mp4", ".mov"}
+VIDEO_TYPES = {".mp4": "video/mp4", ".mov": "video/quicktime"}
 
 router = APIRouter(prefix="/api/videos", tags=["videos"])
 
@@ -122,6 +122,7 @@ def remove_video(
         409: {"description": "A video with this filename already exists"},
         413: {"description": "File too large"},
         415: {"description": "Unsupported video format"},
+        422: {"description": "Invalid video content"},
         500: {"description": "Storage, metadata, or database failure"},
     },
 )
@@ -141,12 +142,15 @@ def upload_video(
     # Check filename
     filename = (upload.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
 
-    if not filename or filename in {".", ".."}:
+    if not filename or not filename.isprintable() or len(filename.encode("utf-8")) > 255 or filename in {".", ".."}:
         return _error(400, "A valid filename is required")
 
-    if Path(filename).suffix.lower() not in ALLOWED_EXTENSIONS:
+    mime_type = VIDEO_TYPES.get(Path(filename).suffix.lower())
+    if mime_type is None:
         return _error(415, "Unsupported video format")
 
+    # Serialize checks for the same filename, including on databases with legacy duplicates.
+    connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (filename,))
     duplicate_id = find_video_by_filename(connection, filename)
 
     if duplicate_id is not None:
@@ -184,38 +188,23 @@ def upload_video(
     # Extract metadata
     try:
         metadata = extract_video_metadata(stored_video.path)
+    except InvalidVideoError:
+        remove_stored_video(stored_video)
+        return _error(422, "Upload a readable MP4 or MOV file with a video track")
     except VideoMetadataError:
         remove_stored_video(stored_video)
         return _error(500, "Metadata extraction failed")
 
     # Create database entry
-    mime_type = upload.content_type or mimetypes.guess_type(filename)[0]
-
     try:
         video = create_video(
             connection,
             original_filename=filename,
             uploader_id=str(user["id"]),
-            mime_type=mime_type or "application/octet-stream",
+            mime_type=mime_type,
             stored_video=stored_video,
             metadata=metadata,
         )
-    except psycopg.IntegrityError:
-        remove_stored_video(stored_video)
-
-        duplicate_id = find_video_by_filename(connection, filename)
-
-        if duplicate_id is not None:
-            return _error(
-                409,
-                "Video with same filename already exists",
-                video_id=duplicate_id,
-                action_required=True,
-            )
-
-        logger.exception("Could not create database record for %s", filename)
-        return _error(500, "Database failure")
-
     except psycopg.Error:
         remove_stored_video(stored_video)
         logger.exception("Could not create database record for %s", filename)
