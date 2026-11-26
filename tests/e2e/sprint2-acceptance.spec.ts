@@ -154,6 +154,10 @@ for (const kind of ['cfr', 'vfr'] as const) {
 
       await page.getByRole('button', { name: '+ New segment' }).click();
       await page.getByLabel('Title', { exact: true }).fill('Acceptance scene');
+      if (kind === 'cfr') {
+        await page.getByLabel('Start (seconds)').fill('0.10');
+        await expect(page.getByLabel('Start frame (inclusive)')).toHaveValue('2');
+      }
       await page.getByLabel('Start frame (inclusive)').fill('10');
       await page.getByLabel('End frame (exclusive)').fill('10');
       await page.getByRole('button', { name: 'Save segment', exact: true }).click();

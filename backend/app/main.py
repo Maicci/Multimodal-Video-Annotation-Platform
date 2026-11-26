@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager, closing
+import logging
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
@@ -21,6 +22,14 @@ from app.repositories.user_repository import (
     find_user_role_by_email,
 )
 from app.schemas.user import Role, UserCreate
+
+
+def _omit_access_log_query(record: logging.LogRecord) -> bool:
+    # Uvicorn passes (client, method, request target, HTTP version, status).
+    args = record.args
+    if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+        record.args = (*args[:2], args[2].partition("?")[0], *args[3:])
+    return True
 
 
 def _bootstrap_admin(database: Database, settings: Settings) -> None:
@@ -61,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
+        logging.getLogger("uvicorn.access").addFilter(_omit_access_log_query)
         application_settings.validate()
         database.initialize()
         _bootstrap_admin(database, application_settings)

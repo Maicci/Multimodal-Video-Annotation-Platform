@@ -22,21 +22,22 @@ def find_video_summary(
 def save_video_summary(
     connection: psycopg.Connection[Any], video_id: str, author_id: str,
     summary: str, version: int,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     with connection:
         require_editable(connection, video_id, author_id)
-        row = connection.execute(
-            """
-            INSERT INTO video_summaries (video_id, author_id, summary)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (video_id, author_id) DO UPDATE
-            SET summary = EXCLUDED.summary, updated_at = CURRENT_TIMESTAMP,
-                version = video_summaries.version + 1
-            WHERE video_summaries.version = %s
-            RETURNING video_id, author_id, summary, version
-            """,
-            (video_id, author_id, summary, version),
-        ).fetchone()
+        if version == 0:
+            row = connection.execute("""
+                INSERT INTO video_summaries (video_id, author_id, summary)
+                VALUES (%s, %s, %s) ON CONFLICT (video_id, author_id) DO NOTHING
+                RETURNING video_id, author_id, summary, version
+            """, (video_id, author_id, summary)).fetchone()
+        else:
+            row = connection.execute("""
+                UPDATE video_summaries
+                SET summary = %s, updated_at = CURRENT_TIMESTAMP, version = version + 1
+                WHERE video_id = %s AND author_id = %s AND version = %s
+                RETURNING video_id, author_id, summary, version
+            """, (summary, video_id, author_id, version)).fetchone()
 
         if row:
             connection.execute("UPDATE video_assignments SET status = CASE WHEN status = 'returned' THEN status ELSE 'in_progress' END, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE video_id = %s AND user_id = %s", (video_id, author_id))

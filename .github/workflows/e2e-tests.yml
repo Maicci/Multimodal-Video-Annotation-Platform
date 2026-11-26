@@ -23,7 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run browser workflow in Docker
-        run: docker compose -f test-space/compose.yaml --profile e2e up --build --abort-on-container-exit --exit-code-from e2e e2e
+        run: docker compose -f test-space/compose.yaml --profile e2e up --build --attach e2e --abort-on-container-exit --exit-code-from e2e e2e
+      - name: Check playback access logs for credentials
+        shell: bash
+        run: docker compose -f test-space/compose.yaml logs --no-color backend frontend | python tests/e2e/check_playback_logs.py
       - name: Save browser reports and acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4

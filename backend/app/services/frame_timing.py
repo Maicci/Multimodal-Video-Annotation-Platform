@@ -1,7 +1,7 @@
 """
 Frame <-> timestamp mapping for videos (CFR and VFR).
 
-Timestamps are read from the container's packet timestamp values with ffprobe.
+Timestamps are read from displayed frames with ffprobe.
 
 Usage:
   * Once per video: FrameTimeline.from_video() then .save()
@@ -24,28 +24,24 @@ from pathlib import Path
 import numpy as np
 
 def extract_pts(video_path: str | Path, stream: int = 0) -> np.ndarray:
-    """Return the timestamps (seconds) of every frame of a video stream, in display order.
-
-    Packets are stored in decode order, sorting gets the display order. 
-    Uses ffprobe subprocess to read the container's packet timestamps.
-    """
+    """Read displayed frames so decoding preroll in trimmed clips is excluded."""
     cmd = [
         "ffprobe", "-v", "error",
         "-select_streams", f"v:{stream}",
-        "-show_entries", "packet=pts_time",
+        "-show_entries", "frame=best_effort_timestamp_time",
         "-of", "json",
         str(video_path),
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=1800)
     except subprocess.CalledProcessError as exc:
         raise ValueError(f"ffprobe could not read video: {exc.stderr.strip()}") from exc
 
-    packets = json.loads(result.stdout).get("packets", [])
-    pts = [float(p["pts_time"]) for p in packets if "pts_time" in p]
+    frames = json.loads(result.stdout).get("frames", [])
+    pts = [float(frame["best_effort_timestamp_time"]) for frame in frames]
     if not pts:
         raise ValueError("No video frames with timestamps found")
-    return np.sort(np.array(pts, dtype=np.float64))
+    return np.array(pts, dtype=np.float64)
 
 @dataclass
 class FrameTimeline:
@@ -54,6 +50,7 @@ class FrameTimeline:
     timestamps: np.ndarray  # timestamps[i] = timestamps (seconds) of frame i
 
     duration: float | None = None
+    preroll_frames: int = 0
 
     def __post_init__(self):
         self.timestamps = np.asarray(self.timestamps, dtype=np.float64)
@@ -73,7 +70,10 @@ class FrameTimeline:
     @classmethod
     # load from .npy file and return a FrameTimeline instance
     def load(cls, path: str | Path, *, duration: float | None = None) -> "FrameTimeline":
-        return cls(np.load(path), duration)
+        timestamps = np.load(path)
+        # Older packet-based maps can include decoding preroll before time zero.
+        first = int(np.searchsorted(timestamps, 0))
+        return cls(timestamps[first:], duration, preroll_frames=first)
 
     # ----- basic properties -----
     @property

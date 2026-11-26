@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,7 +22,6 @@ def client(test_database_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPat
         )),
     )
     def timing(video_id, database_url, video_path, timeline_path, thumbnails_dir):
-        import numpy as np
         Path(timeline_path).parent.mkdir(parents=True, exist_ok=True)
         np.save(timeline_path, np.arange(0, 12.5, 0.04))
     monkeypatch.setattr("app.api.routes.videos.process_video", timing)
@@ -137,6 +137,30 @@ def test_video_summary_is_saved_and_isolated_per_annotator(client: TestClient) -
     assert client.put(url, headers=_auth(other), json={"summary": "Another view."}).status_code == 200
     assert client.get(url, headers=_auth(admin)).json()["summary"] == "Revised summary."
     assert client.get(url, headers=_auth(other)).json()["summary"] == "Another view."
+
+
+def test_legacy_preroll_is_removed_from_player_and_saved_draft(client, tmp_path):
+    headers = _auth(_login(client, "admin@example.com", "initial-admin-password-123"))
+    upload = client.post("/api/videos/upload", headers=headers,
+                         files={"upload": ("trim.mp4", b"video", "video/mp4")})
+    assert upload.status_code == 201
+    base = f"/api/videos/{upload.json()['id']}"
+    draft = client.post(f"{base}/segments", headers=headers,
+                        json={"title": "Opening", "start_time": 0, "end_time": 0.08})
+    assert draft.status_code == 201
+    # Represent the same saved range in an older packet-based map.
+    [path] = (tmp_path / "videos" / "timelines").glob("*.npy")
+    np.save(path, np.concatenate(([-0.08, -0.04], np.load(path))))
+    with client.app.state.database.connect() as connection:
+        connection.execute("UPDATE segments SET start_frame = 2, end_frame = 4 WHERE id = %s",
+                           (draft.json()["id"],))
+
+    timeline = client.get(f"{base}/timeline", headers=headers).json()
+    assert timeline["boundaries"][0] == 0
+    session = client.get(f"{base}/annotation-session", headers=headers).json()
+    [saved] = session["segments"]
+    assert saved == {**draft.json(), "version": draft.json()["version"] + 1}
+    assert client.get(f"{base}/segments", headers=headers).json() == [saved]
 
 
 def test_first_summary_save_requires_version_zero(client: TestClient) -> None:

@@ -10,7 +10,9 @@ Browser playback uses `POST /api/videos/{id}/media-token` with bearer authentica
 The returned token expires in five minutes, is restricted to that video's media
 endpoints, and cannot authenticate annotation writes. Every media request checks
 the user's current account state and assignment. The frontend refreshes it every
-four minutes. Keep these credential-bearing URLs private.
+four minutes. The backend's Uvicorn access log records request paths without
+query strings. The development proxy also omits them when logging forwarding
+errors. Configure any additional proxy or request tracing service the same way.
 
 Segment and summary responses include `version`. Send that version on updates;
 new summaries use version zero. Segment deletion takes `?version=...`.
@@ -30,6 +32,11 @@ Segment intervals are half-open: start is inclusive, end exclusive. Frame N,
 where N is the frame count, denotes the end of the video. Timestamp edits and
 timeline drags snap to the nearest stored boundary; ties choose the earlier one.
 The final boundary uses the probed video duration when available and falls back to the timestamp map's estimated last-frame duration.
+Frame numbers follow decoded display frames, starting at zero. The upload worker
+allows up to 30 minutes to extract the displayed frame timestamps. When reading an
+older timeline with negative decoding preroll, the player skips those entries.
+Editable segments are renumbered from their saved times on load. Submitted
+review snapshots retain the frame numbers recorded at submission.
 New saves persist both frames and timestamps. Existing segments are normalized
 when loaded if their timing artifact is available. Legacy ranges shorter than a
 frame, or with missing timing, retain their text and must be corrected/reprocessed
