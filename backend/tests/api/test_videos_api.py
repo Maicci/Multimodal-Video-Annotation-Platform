@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -57,12 +58,24 @@ def _upload(
     token: str,
     filename: str = "sample.mp4",
     content: bytes = VIDEO_BYTES,
+    title: str | None = None,
 ) -> Response:
     return client.post(
         "/api/videos/upload",
         headers={"Authorization": f"Bearer {token}"},
         files={"upload": (filename, content, "video/mp4")},
+        data={"title": title} if title is not None else None,
     )
+
+
+def _video_row(client: TestClient, video_id: str) -> dict:
+    connection = _app(client).state.database.connect()
+    try:
+        return connection.execute(
+            "SELECT * FROM videos WHERE id = %s", (video_id,)
+        ).fetchone()
+    finally:
+        connection.close()
 
 
 def _metadata() -> VideoMetadata:
@@ -78,6 +91,14 @@ def _metadata() -> VideoMetadata:
 def _metadata_for_existing_file(path: Path) -> VideoMetadata:
     assert path.is_file()
     return _metadata()
+
+
+def _patch_upload_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.api.routes.videos.extract_video_metadata",
+        Mock(side_effect=_metadata_for_existing_file),
+    )
+    monkeypatch.setattr("app.api.routes.videos.process_video", Mock())
 
 
 def test_upload_requires_authentication(client: TestClient) -> None:
@@ -128,6 +149,7 @@ def test_upload_video_persists_bytes_metadata_and_uploader(
     assert row["fps"] == 29.97
     assert row["codec"] == "h264"
     assert row["processing_status"] == "QUEUED"
+    assert row["content_hash"] == hashlib.sha256(VIDEO_BYTES).hexdigest()
     stored_path = Path(row["storage_path"])
     assert stored_path.read_bytes() == VIDEO_BYTES
     queued.assert_called_once()
@@ -137,6 +159,38 @@ def test_upload_video_persists_bytes_metadata_and_uploader(
     assert args[2] == stored_path
     assert args[3] == stored_path.parent.parent / "timelines" / f"{stored_path.stem}.npy"
     assert args[4] == stored_path.parent.parent / "thumbnails" / stored_path.stem
+
+
+def test_upload_uses_given_title(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_upload_dependencies(monkeypatch)
+    response = _upload(client, _token(client), title="  Kitchen scene 1  ")
+
+    assert response.status_code == 201, response.text
+    row = _video_row(client, response.json()["id"])
+    assert row["title"] == "Kitchen scene 1"
+    assert row["original_filename"] == "sample.mp4"
+
+
+def test_upload_title_defaults_to_filename(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_upload_dependencies(monkeypatch)
+    token = _token(client)
+
+    no_title = _upload(client, token, filename="a.mp4", content=b"video a")
+    blank_title = _upload(client, token, filename="b.mp4", content=b"video b", title="   ")
+
+    assert _video_row(client, no_title.json()["id"])["title"] == "a.mp4"
+    assert _video_row(client, blank_title.json()["id"])["title"] == "b.mp4"
+
+
+def test_rejects_title_over_120_characters(client: TestClient) -> None:
+    response = _upload(client, _token(client), title="x" * 121)
+
+    assert response.status_code == 422
+    assert list(_app(client).state.settings.video_storage_path.glob("*")) == []
 
 
 def test_rejects_unsupported_file_type(client: TestClient) -> None:
@@ -152,37 +206,37 @@ def test_rejects_upload_over_configured_size(client: TestClient) -> None:
     assert list(_app(client).state.settings.video_storage_path.glob("*")) == []
 
 
-def test_duplicate_filename_does_not_replace_original(
+def test_duplicate_content_does_not_replace_original(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "app.api.routes.videos.extract_video_metadata",
-        Mock(side_effect=_metadata_for_existing_file),
-    )
-    monkeypatch.setattr(
-        "app.api.routes.videos.process_video",
-        Mock(),
-    )
+    _patch_upload_dependencies(monkeypatch)
     token = _token(client)
     first = _upload(client, token, content=b"first upload")
     assert first.status_code == 201
-    connection = _app(client).state.database.connect()
-    try:
-        row = connection.execute(
-            "SELECT storage_path FROM videos WHERE id = %s", (first.json()["id"],)
-        ).fetchone()
-    finally:
-        connection.close()
+    row = _video_row(client, first.json()["id"])
     first_path = Path(row["storage_path"])
 
-    duplicate = _upload(client, token, content=b"replacement")
+    duplicate = _upload(client, token, content=b"first upload")
 
     assert duplicate.status_code == 409
     assert duplicate.json()["action_required"] is True
     assert duplicate.json()["video_id"] == first.json()["id"]
     assert first_path.read_bytes() == b"first upload"
     assert len(list(first_path.parent.iterdir())) == 1
+
+
+def test_same_content_under_another_filename_is_rejected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_upload_dependencies(monkeypatch)
+    token = _token(client)
+    first = _upload(client, token, filename="original.mp4", content=b"same bytes")
+    renamed = _upload(client, token, filename="renamed.mp4", content=b"same bytes")
+
+    assert first.status_code == 201
+    assert renamed.status_code == 409
+    assert renamed.json()["video_id"] == first.json()["id"]
 
 
 def test_metadata_failure_returns_500_and_removes_file(
@@ -231,10 +285,9 @@ def test_database_failure_returns_500_and_removes_file(
     assert response.status_code == 500
     assert response.json() == {"error": "Database failure"}
     assert list(_app(client).state.settings.video_storage_path.glob("*")) == []
-    
 
 
-def test_concurrent_uploads_share_one_filename(client, monkeypatch):
+def test_concurrent_identical_uploads_create_one_video(client, monkeypatch):
     monkeypatch.setattr("app.api.routes.videos.extract_video_metadata", _metadata_for_existing_file)
     monkeypatch.setattr("app.api.routes.videos.process_video", Mock())
     token = _token(client)
@@ -245,7 +298,10 @@ def test_concurrent_uploads_share_one_filename(client, monkeypatch):
         return _upload(client, token, content=content)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        responses = sorted(pool.map(upload, [b"first", b"second"]), key=lambda response: response.status_code)
+        responses = sorted(
+            pool.map(upload, [b"same bytes", b"same bytes"]),
+            key=lambda response: response.status_code,
+        )
     created, duplicate = responses
     assert [created.status_code, duplicate.status_code] == [201, 409]
     assert duplicate.json()["video_id"] == created.json()["id"]

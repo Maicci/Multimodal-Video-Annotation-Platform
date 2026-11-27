@@ -103,6 +103,12 @@ class Database:
             connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS timeline_path TEXT")
             connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS frame_count INTEGER")
             connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_vfr BOOLEAN")
+            connection.execute("ALTER TABLE videos ADD COLUMN IF NOT EXISTS content_hash TEXT")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_content_hash "
+                "ON videos (content_hash) WHERE content_hash IS NOT NULL"
+            )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS segments (

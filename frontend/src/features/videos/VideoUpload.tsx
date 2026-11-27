@@ -6,11 +6,12 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024;
 
 type Props = { onUploaded: () => void };
 
-function sendUpload(file: File, token: string, onProgress: (percent: number) => void): Promise<string> {
+function sendUpload(file: File, title: string, token: string, onProgress: (percent: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("upload", file);
+    if (title.trim()) formData.append("title", title.trim());
 
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
@@ -46,6 +47,7 @@ function sendUpload(file: File, token: string, onProgress: (percent: number) => 
 function VideoUpload({ onUploaded }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -87,9 +89,10 @@ function VideoUpload({ onUploaded }: Props) {
     }
 
     try {
-      const filename = await sendUpload(file, token, setUploadPercent);
+      const filename = await sendUpload(file, title, token, setUploadPercent);
       setSuccessMessage(`Video "${filename}" uploaded successfully.`);
       setFile(null);
+      setTitle("");
       if (fileInput.current) fileInput.current.value = "";
       onUploaded();
     } catch (cause) {
@@ -110,13 +113,26 @@ function VideoUpload({ onUploaded }: Props) {
         onChange={handleFileChange}
         disabled={isUploading}
       />
-
-      {file && (
-        <div>
-          <p>Selected file: {file.name}</p>
-          <p>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-        </div>
-      )}
+    
+  {file && (
+    <>
+      <label>
+        Video name
+        <input
+          type="text"
+          value={title}
+          maxLength={120}
+          placeholder="Leave empty for filename"
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={isUploading}
+        />
+      </label>
+      <div>
+        <p>Selected file: {file.name}</p>
+        <p>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</p>
+      </div>
+    </>
+  )}
 
       {error && <p role="alert">{error}</p>}
       {successMessage && <p role="status">{successMessage}</p>}

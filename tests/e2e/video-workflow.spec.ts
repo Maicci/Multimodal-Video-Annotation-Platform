@@ -57,7 +57,7 @@ test('upload, play, annotate, reload, edit, and delete a video', async ({ page, 
     );
     await page.getByRole('button', { name: 'Upload', exact: true }).click();
     expect((await duplicateResponse).status()).toBe(409);
-    await expect(page.getByRole('alert')).toHaveText('Video with same filename already exists');
+    await expect(page.getByRole('alert')).toHaveText('This video has already been uploaded');
 
     await row.getByRole('button', { name: 'View' }).click();
 

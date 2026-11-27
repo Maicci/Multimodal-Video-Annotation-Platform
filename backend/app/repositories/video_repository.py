@@ -21,7 +21,6 @@ _VIDEO_COLUMNS = """
     height, fps, codec, processing_status, metadata_extracted, processing_error
 """
 
-
 def _row_to_video(row: dict[str, Any]) -> Video:
     return Video(
         id=str(row["id"]),
@@ -42,16 +41,14 @@ def _row_to_video(row: dict[str, Any]) -> Video:
         processing_error=row["processing_error"],
     )
 
-
-def find_video_by_filename(
-    connection: psycopg.Connection[dict[str, Any]], original_filename: str
+def find_video_by_content_hash(
+    connection: psycopg.Connection[dict[str, Any]], content_hash: str
 ) -> str | None:
     row = connection.execute(
-        "SELECT id FROM videos WHERE original_filename = %s",
-        (original_filename,),
+        "SELECT id FROM videos WHERE content_hash = %s",
+        (content_hash,),
     ).fetchone()
     return None if row is None else str(row["id"])
-
 
 def find_video_by_id(
     connection: psycopg.Connection[dict[str, Any]],
@@ -79,6 +76,8 @@ def create_video(
     mime_type: str,
     stored_video: StoredVideo,
     metadata: VideoMetadata,
+    title: str | None = None,
+    content_hash: str | None = None,
 ) -> Video:
     video_id = str(uuid4())
     upload_time = datetime.now(timezone.utc)
@@ -89,15 +88,15 @@ def create_video(
                 id, title, original_filename, stored_filename, storage_path,
                 uploader_id, upload_time, file_size_bytes, mime_type,
                 duration_seconds, width, height, fps, codec, processing_status,
-                metadata_extracted, updated_at
+                metadata_extracted, content_hash, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    'QUEUED', TRUE, %s)
+                    'QUEUED', TRUE, %s, %s)
             RETURNING {_VIDEO_COLUMNS}
             """,
             (
                 video_id,
-                original_filename,
+                title or original_filename,
                 original_filename,
                 stored_video.filename,
                 str(stored_video.path),
@@ -110,6 +109,7 @@ def create_video(
                 metadata.height,
                 metadata.fps,
                 metadata.codec,
+                content_hash,
                 upload_time,
             ),
         ).fetchone()
