@@ -3,7 +3,7 @@ import { errorMessage } from "../../api/errorMessage";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-type Role = "annotator" | "reviewer" | "administrator";
+type Role = "annotator" | "administrator";
 
 type PendingUser = {
   id: string;
@@ -202,7 +202,6 @@ export default function PendingUsers() {
                     }
                   >
                     <option value="annotator">Annotator</option>
-                    <option value="reviewer">Reviewer</option>
                     <option value="administrator">Administrator</option>
                   </select>
                 </td>

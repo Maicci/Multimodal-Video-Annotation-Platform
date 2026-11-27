@@ -173,3 +173,50 @@ def test_permissions_validation_and_skip_resume(workflow):
     assert client.patch(f"/api/users/{users['annotator']['id']}/role", headers=admin, json={"role": "reviewer"}).status_code == 200
     assert client.post(f"/api/reviews/{review_id}/approve", headers=author, json={"expected_version": 2}).status_code == 403
     assert client.post(f"/api/reviews/{review_id}/approve", headers=admin, json={"expected_version": 2}).status_code == 200
+
+
+def test_admin_can_export_annotation_as_json(workflow):
+    client, admin, users, base, _ = workflow
+    author = users["annotator"]["headers"]
+    save_work(client, base, author)
+    assert client.post(f"{base}/annotation-session/submit", headers=author,
+                       json={"expected_version": 0}).status_code == 200
+    review_id = client.get("/api/reviews", headers=admin).json()[0]["id"]
+    response = client.get(f"/api/reviews/{review_id}/export/json", headers=admin)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["content-disposition"] == f'attachment; filename="annotation-{review_id}.json"'
+    data = response.json()
+    assert data["video"]["filename"] == "review.mp4"
+    assert data["annotator"]["email"] == "annotator@example.com"
+    assert data["annotation"]["summary"] == "Whole video"
+    assert data["annotation"]["segments"][0]["title"] == "Opening"
+
+
+def test_admin_can_export_annotation_as_csv(workflow):
+    client, admin, users, base, _ = workflow
+    author = users["annotator"]["headers"]
+    save_work(client, base, author)
+    assert client.post(f"{base}/annotation-session/submit", headers=author,
+                       json={"expected_version": 0}).status_code == 200
+    review_id = client.get("/api/reviews", headers=admin).json()[0]["id"]
+    response = client.get(f"/api/reviews/{review_id}/export/csv", headers=admin)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.headers["content-disposition"] == f'attachment; filename="annotation-{review_id}.csv"'
+    assert "review.mp4" in response.text
+    assert "annotator@example.com" in response.text
+    assert "Opening" in response.text
+    assert "Whole video" in response.text
+
+
+@pytest.mark.parametrize("format", ["json", "csv"])
+def test_annotator_cannot_export_annotations(workflow, format):
+    client, admin, users, base, _ = workflow
+    author = users["annotator"]["headers"]
+    save_work(client, base, author)
+    assert client.post(f"{base}/annotation-session/submit", headers=author,
+                       json={"expected_version": 0}).status_code == 200
+    review_id = client.get("/api/reviews", headers=admin).json()[0]["id"]
+    assert client.get(f"/api/reviews/{review_id}/export/{format}",
+                      headers=author).status_code == 403
