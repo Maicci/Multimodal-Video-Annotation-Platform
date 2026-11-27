@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field, field_validator
 from psycopg.types.json import Jsonb
+from fastapi.responses import JSONResponse, Response
 
 from app.api.dependencies import Connection, CurrentUser
 from app.api.video_access import require_video_access
@@ -14,7 +15,8 @@ from app.repositories.video_summary_repository import find_video_summary
 from app.schemas.segment import SegmentInput
 from app.schemas.text import DatabaseText
 from app.services.segment_timing import resolve_segment, timeline_for
-
+import csv
+import io
 router = APIRouter(tags=["annotation reviews"])
 
 
@@ -29,8 +31,8 @@ class WorkflowAction(BaseModel):
 
 
 def require_reviewer(user):
-    if user["role"] not in ("reviewer", "administrator"):
-        raise HTTPException(403, "Reviewer role required")
+    if user["role"] != ("administrator"):
+        raise HTTPException(403, "Administrator role required")
 
 
 def check_version(assignment, payload):
@@ -143,6 +145,172 @@ def detail(assignment_id: UUID, connection: Connection, user: CurrentUser):
                 "submitted_at": submission["created_at"], "submission_version": submission["version"],
                 **submission["snapshot"], "review_history": review_history(connection, assignment_id),
                 "can_review": str(user["id"]) != str(assignment["user_id"]) and assignment["status"] == "submitted"}
+        
+        
+@router.get("/api/reviews/{assignment_id}/export/json")
+def export_json(
+    assignment_id: UUID,
+    connection: Connection,
+    user: CurrentUser,
+):
+    require_reviewer(user)
+
+    assignment = connection.execute(
+        """
+        SELECT
+            a.id,
+            a.video_id,
+            a.user_id,
+            a.status,
+            v.original_filename AS filename,
+            u.full_name AS author_name,
+            u.email AS author_email
+        FROM video_assignments a
+        JOIN videos v ON v.id = a.video_id
+        JOIN users u ON u.id = a.user_id
+        WHERE a.id = %s
+        """,
+        (str(assignment_id),),
+    ).fetchone()
+
+    if not assignment:
+        raise HTTPException(404, "Review not found")
+
+    submission = connection.execute(
+        """
+        SELECT snapshot, created_at, version
+        FROM annotation_review_events
+        WHERE assignment_id = %s
+          AND snapshot IS NOT NULL
+        ORDER BY version DESC
+        LIMIT 1
+        """,
+        (str(assignment_id),),
+    ).fetchone()
+
+    if not submission:
+        raise HTTPException(
+            404,
+            "No submitted annotation is available for export",
+        )
+
+    export_data = {
+        "assignment_id": assignment["id"],
+        "video": {
+            "id": assignment["video_id"],
+            "filename": assignment["filename"],
+        },
+        "annotator": {
+            "id": assignment["user_id"],
+            "name": assignment["author_name"],
+            "email": assignment["author_email"],
+        },
+        "status": assignment["status"],
+        "submission_version": submission["version"],
+        "submitted_at": submission["created_at"],
+        "annotation": submission["snapshot"],
+    }
+
+    return JSONResponse(
+        content=jsonable_encoder(export_data),
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="annotation-{assignment_id}.json"'
+        },
+    )
+    
+    
+@router.get("/api/reviews/{assignment_id}/export/csv")
+def export_csv(
+    assignment_id: UUID,
+    connection: Connection,
+    user: CurrentUser,
+):
+    require_reviewer(user)
+
+    assignment = connection.execute(
+        """
+        SELECT
+            a.id,
+            a.video_id,
+            a.user_id,
+            a.status,
+            v.original_filename AS filename,
+            u.full_name AS author_name,
+            u.email AS author_email
+        FROM video_assignments a
+        JOIN videos v ON v.id = a.video_id
+        JOIN users u ON u.id = a.user_id
+        WHERE a.id = %s
+        """,
+        (str(assignment_id),),
+    ).fetchone()
+
+    if not assignment:
+        raise HTTPException(404, "Review not found")
+
+    submission = connection.execute(
+        """
+        SELECT snapshot, created_at, version
+        FROM annotation_review_events
+        WHERE assignment_id = %s
+          AND snapshot IS NOT NULL
+        ORDER BY version DESC
+        LIMIT 1
+        """,
+        (str(assignment_id),),
+    ).fetchone()
+
+    if not submission:
+        raise HTTPException(
+            404,
+            "No submitted annotation is available for export",
+        )
+
+    snapshot = submission["snapshot"]
+    segments = snapshot.get("segments", [])
+
+    output = io.StringIO()
+
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "video_id",
+        "filename",
+        "annotator_name",
+        "annotator_email",
+        "segment_id",
+        "title",
+        "start_time",
+        "end_time",
+        "description",
+        "audio_description",
+        "summary",
+    ])
+
+    for segment in segments:
+        writer.writerow([
+            assignment["video_id"],
+            assignment["filename"],
+            assignment["author_name"],
+            assignment["author_email"],
+            segment.get("id", ""),
+            segment.get("title", ""),
+            segment.get("start_time", ""),
+            segment.get("end_time", ""),
+            segment.get("description", ""),
+            segment.get("audio_description", ""),
+            snapshot.get("summary", ""),
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="annotation-{assignment_id}.csv"'
+        },
+    )
 
 
 def decide(assignment_id, payload, connection, user, decision):

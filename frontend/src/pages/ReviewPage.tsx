@@ -165,6 +165,52 @@ export default function ReviewPage({ onSignOut, onBack }: { onSignOut: () => voi
     { title: "Awaiting review", rows: items.filter((item) => item.status === "submitted") },
     { title: "Review history", rows: items.filter((item) => item.status !== "submitted") },
   ];
+
+async function exportAnnotation(
+  assignmentId: string,
+  format: "json" | "csv",
+) {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/reviews/${assignmentId}/export/${format}`,
+      {
+        headers: authHeaders(),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Could not export annotation (${response.status}).`);
+    }
+
+    const blob = await response.blob();
+
+    const contentDisposition = response.headers.get("Content-Disposition");
+
+    const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+
+    const filename =
+      filenameMatch?.[1] ?? `annotation-${assignmentId}.${format}`;
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (cause) {
+    setError(
+      cause instanceof Error
+        ? cause.message
+        : "Could not export annotation.",
+    );
+  }
+}
+
   return <main className="review-page">
     <nav aria-label="Reviewer navigation">{onBack && <button type="button" onClick={onBack}>Back to administration</button>}<button type="button" onClick={onSignOut}>Sign out</button></nav>
     {selected ? <SubmittedWork key={selected} id={selected}
@@ -179,9 +225,37 @@ export default function ReviewPage({ onSignOut, onBack }: { onSignOut: () => voi
       {!loading && !error && items.length > 0 && queueSections.map(({ title, rows }) => (
         <section key={title}><h2>{title} ({rows.length})</h2><ul className="review-queue">
           {rows.map((item) => <li key={item.id}>
-            <strong>{item.filename}</strong><span>{item.author_name} · {item.status}</span>
-            <button type="button" onClick={() => setSelected(item.id)}>{item.status === "submitted" ? "Review submission" : "View review"}</button>
-          </li>)}
+  <strong>{item.filename}</strong>
+
+  <span>
+    {item.author_name} · {item.status}
+  </span>
+
+  <div className="review-queue-actions">
+    <button
+      type="button"
+      onClick={() => setSelected(item.id)}
+    >
+      {item.status === "submitted"
+        ? "Review submission"
+        : "View review"}
+    </button>
+
+    <button
+      type="button"
+      onClick={() => void exportAnnotation(item.id, "json")}
+    >
+      Export JSON
+    </button>
+
+    <button
+      type="button"
+      onClick={() => void exportAnnotation(item.id, "csv")}
+    >
+      Export CSV
+    </button>
+  </div>
+</li>)}
         </ul></section>
       ))}
     </>}
