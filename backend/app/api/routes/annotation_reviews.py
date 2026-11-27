@@ -31,7 +31,7 @@ class WorkflowAction(BaseModel):
 
 
 def require_reviewer(user):
-    if user["role"] != ("administrator"):
+    if user["role"] not in ("reviewer", "administrator"):
         raise HTTPException(403, "Administrator role required")
 
 
