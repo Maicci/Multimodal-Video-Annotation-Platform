@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 import psycopg
+import hashlib
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
+from fastapi import Form, APIRouter, BackgroundTasks, Depends, File, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from app.api.dependencies import Connection, CurrentUser, get_settings
@@ -17,7 +18,7 @@ from app.api.video_access import require_video_access, create_media_token
 from app.repositories.video_repository import (
     create_video,
     delete_video,
-    find_video_by_filename,
+    find_video_by_content_hash,
     list_videos,
 )
 from app.schemas.video import VideoListItem, VideoUploadResponse
@@ -37,6 +38,8 @@ from app.services.video_storage import (
 logger = logging.getLogger(__name__)
 VIDEO_TYPES = {".mp4": "video/mp4", ".mov": "video/quicktime"}
 
+title: str | None = Form(None),
+
 router = APIRouter(prefix="/api/videos", tags=["videos"])
 
 
@@ -45,6 +48,13 @@ def _error(status_code: int, error: str, **extra: object) -> JSONResponse:
         status_code=status_code,
         content={"error": error, **extra},
     )
+
+def _sha256_of_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 @router.get("", response_model=list[VideoListItem])
 def list_all_videos(
@@ -134,6 +144,7 @@ def upload_video(
     connection: Connection,
     user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    title: Annotated[str | None, Form()] = None,
 ) -> VideoUploadResponse | JSONResponse:
 
     if user["role"] != "administrator":
@@ -149,17 +160,10 @@ def upload_video(
     if mime_type is None:
         return _error(415, "Unsupported video format")
 
-    # Serialize checks for the same filename, including on databases with legacy duplicates.
-    connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (filename,))
-    duplicate_id = find_video_by_filename(connection, filename)
+    title = (title or "").strip() or None
+    if title and len(title) > 120:
+        return _error(422, "Name must be 120 characters or fewer")
 
-    if duplicate_id is not None:
-        return _error(
-            409,
-            "Video with same filename already exists",
-            video_id=duplicate_id,
-            action_required=True,
-        )
 
     # Store the video
     storage_directory = settings.video_storage_path
@@ -185,6 +189,25 @@ def upload_video(
         logger.exception("Could not store uploaded video %s", filename)
         return _error(500, "Storage failure")
 
+    try:
+        content_hash = _sha256_of_file(stored_video.path)
+    except OSError:
+        remove_stored_video(stored_video)
+        logger.exception("Could not hash uploaded video %s", filename)
+        return _error(500, "Storage failure")
+
+    # Check for identical video
+    connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (content_hash,))
+    duplicate_id = find_video_by_content_hash(connection, content_hash)
+    if duplicate_id is not None:
+        remove_stored_video(stored_video)
+        return _error(
+            409,
+            "This video has already been uploaded",
+            video_id=duplicate_id,
+            action_required=True,
+        )
+
     # Extract metadata
     try:
         metadata = extract_video_metadata(stored_video.path)
@@ -200,10 +223,12 @@ def upload_video(
         video = create_video(
             connection,
             original_filename=filename,
+            title=title,
             uploader_id=str(user["id"]),
             mime_type=mime_type,
             stored_video=stored_video,
             metadata=metadata,
+            content_hash=content_hash,
         )
     except psycopg.Error:
         remove_stored_video(stored_video)
